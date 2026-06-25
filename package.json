@@ -1,0 +1,96 @@
+{
+  "name": "xiaoliang-rh",
+  "private": true,
+  "version": "1.0.5",
+  "displayName": "小梁RH",
+  "description": "小梁RH Photoshop UXP panel for RunningHub repair, local cache, decoding, and return-image workflows.",
+  "author": "小梁",
+  "license": "UNLICENSED",
+  "homepage": "about:xiaoliang-rh",
+  "repository": {
+    "type": "local-workspace",
+    "directory": "小梁RH"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "config": {
+    "uxp_dist": "dist",
+    "plugin_root": "plugin",
+    "preset_bundle": "../预设，图标以及语音/小梁RH应用预设包.json"
+  },
+  "keywords": [
+    "xiaoliang-rh",
+    "photoshop-uxp",
+    "runninghub",
+    "return-image",
+    "image-repair"
+  ],
+  "xiaoliangRh": {
+    "productName": "小梁RH",
+    "workspace": "Photoshop UXP",
+    "primaryFlow": "RunningHub 回图与本地缓存",
+    "maintainer": "小梁",
+    "defaultResultCache": "PluginData/image_cache",
+    "featureAreas": [
+      "RunningHub 应用任务提交",
+      "本地回图缓存",
+      "小黄鸭解码开关",
+      "Photoshop 自动回传"
+    ],
+    "buildNotes": {
+      "distFolder": "dist",
+      "selfCheck": "scripts/pluginSelfCheck.cjs",
+      "presetBundle": "预设，图标以及语音/小梁RH应用预设包.json"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/xlrhBuild.cjs development --verify-dist",
+    "build:dev": "node scripts/xlrhBuild.cjs development --verify-dist",
+    "build:prod": "node scripts/xlrhBuild.cjs production --verify-dist",
+    "check:plugin": "node scripts/pluginSelfCheck.cjs",
+    "watch": "nodemon -w src -w plugin -w scripts -w webpack.config.js -e js,jsx,json,css,html,cjs,mjs -x npm run build:dev",
+    "uxp:load": "cd dist && uxp plugin load",
+    "uxp:reload": "cd dist && uxp plugin reload",
+    "uxp:watch": "cd dist && nodemon --exec \"uxp plugin reload\" -e js,css,html,json",
+    "uxp:debug": "cd dist && uxp plugin debug",
+    "postinstall": "patch-package",
+    "build:hw-monitor-exe": "cd scripts/hw-monitor-exe && go mod tidy && node build.cjs",
+    "build:hw-monitor-exe:console": "node scripts/hw-monitor-exe/build-console.cjs",
+    "sign:hw-monitor-exe": "powershell -ExecutionPolicy Bypass -File \"scripts/hw-monitor-exe/security/sign-and-verify.ps1\" -ExePath \"plugin/bin/hw-monitor-server/xiaoliang-rh-hw-monitor.exe\"",
+    "verify:hw-monitor-exe-sign": "powershell -ExecutionPolicy Bypass -File \"scripts/hw-monitor-exe/security/verify-signature.ps1\" -ExePath \"plugin/bin/hw-monitor-server/xiaoliang-rh-hw-monitor.exe\"",
+    "security-check:hw-monitor-exe": "powershell -ExecutionPolicy Bypass -File \"scripts/hw-monitor-exe/security/release-security-check.ps1\" -ExePath \"plugin/bin/hw-monitor-server/xiaoliang-rh-hw-monitor.exe\" -OutJson \"scripts/hw-monitor-exe/dist/security-baseline.json\" -AllowUnsigned",
+    "security-check:hw-monitor-exe:signed-only": "powershell -ExecutionPolicy Bypass -File \"scripts/hw-monitor-exe/security/release-security-check.ps1\" -ExePath \"plugin/bin/hw-monitor-server/xiaoliang-rh-hw-monitor.exe\" -OutJson \"scripts/hw-monitor-exe/dist/security-baseline.json\""
+  },
+  "dependencies": {
+    "react": "^16.8.6",
+    "react-dom": "^16.8.6",
+    "react-sortable-hoc": "^2.0.0",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "jimp": "^1.6.0",
+    "marked": "^17.0.5",
+    "socket.io-client": "^4.8.1",
+    "systeminformation": "^5.31.5",
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "webpack": "^5.88.1",
+    "webpack-cli": "^5.1.4",
+    "babel-loader": "^8.0.6",
+    "@babel/core": "^7.8.7",
+    "@babel/plugin-proposal-object-rest-spread": "^7.8.3",
+    "@babel/plugin-syntax-class-properties": "^7.10.4",
+    "@babel/plugin-transform-react-jsx": "^7.8.3",
+    "clean-webpack-plugin": "^2.0.2",
+    "css-loader": "^6.8.1",
+    "file-loader": "^5.1.0",
+    "nodemon": "^2.0.7",
+    "patch-package": "^8.0.1",
+    "style-loader": "^1.1.3"
+  },
+  "resolutions": {
+    "acorn": "npm:acorn-with-stage3"
+  }
+}

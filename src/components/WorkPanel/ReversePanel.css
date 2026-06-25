@@ -1,0 +1,388 @@
+:root {
+    --xlrh-control-bg: rgba(6, 10, 17, 0.48);
+    --xlrh-control-border: rgba(255, 255, 255, 0.12);
+    --xlrh-control-text: rgba(246, 250, 255, 0.9);
+    --xlrh-muted-text: rgba(246, 250, 255, 0.58);
+}
+
+.reverse-panel-inner {
+    padding: 2px 0 4px;
+    display: grid;
+    gap: 11px;
+}
+
+.reverse-empty,
+.reverse-panel-hint,
+.reverse-no-model {
+    min-height: 44px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: rgba(6, 9, 15, 0.38);
+    color: var(--xlrh-muted-text);
+    font-size: 11px;
+    line-height: 1.52;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.reverse-panel-hint {
+    justify-content: flex-start;
+    text-align: left;
+    border-left: 3px solid var(--drawer-accent, #8fd7ff);
+    background: color-mix(in srgb, var(--drawer-accent, #8fd7ff) 9%, rgba(6, 9, 15, 0.42));
+}
+
+.reverse-no-model {
+    flex-direction: column;
+    gap: 3px;
+    color: rgba(255, 215, 143, 0.92);
+}
+
+.reverse-no-model-hint {
+    color: rgba(246, 250, 255, 0.54);
+    font-size: 10px;
+}
+
+.reverse-flex-row,
+.reverse-actions-row,
+.reverse-fill-btns,
+.reverse-actions {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+}
+
+.reverse-flex-row,
+.reverse-actions-row {
+    flex-wrap: wrap;
+}
+
+.reverse-col-item {
+    flex: 1 1 138px;
+    min-width: 0;
+}
+
+.reverse-row,
+.reverse-result-block,
+.reverse-result-groups {
+    width: 100%;
+    min-width: 0;
+}
+
+.reverse-label {
+    display: block;
+    margin: 0 0 5px;
+    color: rgba(246, 250, 255, 0.7);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.reverse-control-box {
+    position: relative;
+    z-index: 20;
+    min-height: 33px;
+    display: grid;
+    grid-template-columns: minmax(34px, auto) 1px minmax(0, 1fr);
+    align-items: stretch;
+    border: 1px solid var(--xlrh-control-border);
+    border-radius: 8px;
+    background: var(--xlrh-control-bg);
+    color: var(--xlrh-control-text);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+    transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.reverse-control-box:hover {
+    border-color: color-mix(in srgb, var(--drawer-accent, #8fd7ff) 36%, rgba(255, 255, 255, 0.18));
+    background: rgba(9, 14, 22, 0.72);
+}
+
+.reverse-control-box:active {
+    box-shadow: inset 0 1px 9px rgba(0, 0, 0, 0.24);
+}
+
+.reverse-control-box.active-dropdown {
+    z-index: 20000;
+    border-color: color-mix(in srgb, var(--drawer-accent, #8fd7ff) 66%, white 8%);
+    background: rgba(8, 12, 20, 0.92);
+}
+
+.reverse-control-label {
+    min-width: 34px;
+    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(246, 250, 255, 0.58);
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.reverse-control-divider {
+    width: 1px;
+    height: 18px;
+    align-self: center;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.reverse-control-content {
+    min-width: 0;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.reverse-control-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reverse-caret {
+    flex: 0 0 auto;
+    margin-left: 6px;
+    color: rgba(255, 255, 255, 0.42);
+    font-size: 9px;
+    transition: transform 140ms ease, color 140ms ease;
+}
+
+.reverse-caret.open {
+    color: color-mix(in srgb, var(--drawer-accent, #8fd7ff) 70%, white);
+    transform: rotate(180deg);
+}
+
+.reverse-dropdown {
+    position: absolute;
+    top: calc(100% + 5px);
+    left: 0;
+    right: 0;
+    max-height: 0;
+    padding: 0;
+    display: grid;
+    overflow: hidden auto;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: rgba(12, 16, 24, 0.98);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.36);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-4px);
+    transition: opacity 160ms ease, max-height 180ms ease, transform 160ms ease, border-color 160ms ease;
+}
+
+.reverse-dropdown.open {
+    max-height: 168px;
+    border-color: color-mix(in srgb, var(--drawer-accent, #8fd7ff) 30%, rgba(255, 255, 255, 0.12));
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.reverse-dropdown-item {
+    min-height: 29px;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+    color: rgba(255, 255, 255, 0.72);
+    cursor: pointer;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reverse-dropdown-item:last-child {
+    border-bottom: 0;
+}
+
+.reverse-dropdown-item:hover {
+    background: color-mix(in srgb, var(--drawer-accent, #8fd7ff) 18%, transparent);
+    color: #ffffff;
+}
+
+.reverse-dropdown-item.active {
+    color: color-mix(in srgb, var(--drawer-accent, #8fd7ff) 75%, white);
+    background: color-mix(in srgb, var(--drawer-accent, #8fd7ff) 24%, transparent);
+}
+
+.reverse-dropdown-item-disabled,
+.reverse-dropdown-item-disabled:hover {
+    cursor: not-allowed;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.34);
+}
+
+.reverse-actions-loading {
+    pointer-events: auto;
+}
+
+.reverse-btn,
+.reverse-btn-fill,
+.reverse-btn-append,
+.reverse-btn-cancel,
+.reverse-btn-primary {
+    position: relative;
+    min-width: 0;
+    min-height: 32px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    background: rgba(8, 12, 18, 0.58);
+    color: rgba(255, 255, 255, 0.86);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    transition: transform 120ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.reverse-btn:hover:not(:disabled),
+.reverse-btn-fill:hover:not(:disabled),
+.reverse-btn-append:hover:not(:disabled),
+.reverse-btn-cancel:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--drawer-accent, #8fd7ff) 38%, rgba(255, 255, 255, 0.18));
+    background: rgba(13, 18, 27, 0.76);
+}
+
+.reverse-btn:active:not(:disabled),
+.reverse-btn-fill:active:not(:disabled),
+.reverse-btn-append:active:not(:disabled),
+.reverse-btn-cancel:active:not(:disabled),
+.reverse-btn-primary:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.reverse-btn:disabled,
+.reverse-btn-fill:disabled,
+.reverse-btn-append:disabled,
+.reverse-btn-cancel:disabled,
+.reverse-btn-primary:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.reverse-btn-primary {
+    flex: 1 1 160px;
+    border-color: color-mix(in srgb, var(--drawer-accent, #8fd7ff) 48%, rgba(255, 255, 255, 0.12));
+    background: color-mix(in srgb, var(--drawer-accent, #8fd7ff) 26%, rgba(8, 12, 18, 0.72));
+    color: #ffffff;
+}
+
+.reverse-btn-cancel,
+.reverse-btn-fill,
+.reverse-btn-append {
+    flex: 1 1 92px;
+}
+
+.reverse-btn-as-progress .reverse-btn-inner {
+    position: relative;
+    z-index: 2;
+}
+
+.reverse-btn-progress-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    background: color-mix(in srgb, var(--drawer-accent, #8fd7ff) 42%, transparent);
+    transition: width 220ms ease;
+}
+
+.reverse-btn-shimmer {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.18) 42%, transparent 74%);
+    animation: xlrhReverseSweep 1.1s linear infinite;
+}
+
+.reverse-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.22);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: xlrhReverseSpin 800ms linear infinite;
+}
+
+.reverse-result-block {
+    display: grid;
+    gap: 6px;
+}
+
+.reverse-result-textarea {
+    width: 100%;
+    min-height: 168px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    background: rgba(6, 9, 15, 0.48);
+    color: rgba(255, 255, 255, 0.9);
+    box-sizing: border-box;
+    font: inherit;
+    font-size: var(--xlrh-input-font-size, 13px);
+    line-height: 1.55;
+    resize: vertical;
+}
+
+.reverse-result-textarea:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--drawer-accent, #8fd7ff) 48%, rgba(255, 255, 255, 0.15));
+}
+
+.reverse-result-error {
+    border-color: rgba(255, 114, 114, 0.45);
+    color: rgba(255, 216, 216, 0.96);
+}
+
+.reverse-result-loading {
+    opacity: 0.92;
+}
+
+.reverse-result-groups {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.reverse-result-group-tag,
+.reverse-result-group-tag-error {
+    min-height: 22px;
+    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.76);
+    font-size: 10px;
+}
+
+.reverse-result-group-tag-error {
+    background: rgba(255, 92, 92, 0.14);
+    color: rgba(255, 190, 190, 0.94);
+}
+
+@keyframes xlrhReverseSweep {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(100%); }
+}
+
+@keyframes xlrhReverseSpin {
+    to { transform: rotate(360deg); }
+}

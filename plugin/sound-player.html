@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>小梁RH Sound</title>
+</head>
+<body>
+<script>
+(function () {
+    function unwrapPlayMessage(event) {
+        var data = event && event.data;
+        if (!data || data.type !== "play" || !data.base64) return null;
+        return {
+            base64: String(data.base64),
+            volume: typeof data.volume === "number" ? data.volume : 0.6
+        };
+    }
+
+    function playMp3Base64(request) {
+        var audio = new Audio("data:audio/mp3;base64," + request.base64);
+        audio.volume = Math.max(0, Math.min(1, request.volume));
+        return audio.play();
+    }
+
+    window.addEventListener("message", function (event) {
+        var request = unwrapPlayMessage(event);
+        if (!request) return;
+        try {
+            playMp3Base64(request).catch(function (error) {
+                console.warn("[xiaoliang-rh sound] play failed:", error);
+            });
+        } catch (error) {
+            console.warn("[xiaoliang-rh sound] audio error:", error);
+        }
+    });
+
+    try {
+        if (window.uxpHost && typeof window.uxpHost.postMessage === "function") {
+            window.uxpHost.postMessage({ type: "sound-ready" });
+        }
+    } catch (_) {}
+}());
+</script>
+</body>
+</html>

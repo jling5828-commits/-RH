@@ -1,0 +1,414 @@
+.xlrh-assist-shell {
+    --xlrh-assist-accent: var(--drawer-accent, #c7a8ff);
+    --xlrh-assist-line: rgba(255, 255, 255, 0.12);
+    --xlrh-assist-text: rgba(250, 252, 255, 0.9);
+    --xlrh-assist-muted: rgba(246, 250, 255, 0.62);
+    --xlrh-assist-bg: rgba(5, 9, 15, 0.46);
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    padding: 2px 0 4px;
+    color: var(--xlrh-assist-text);
+}
+
+.xlrh-assist-section,
+.xlrh-assist-result {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.xlrh-assist-rule {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+}
+
+.xlrh-assist-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+}
+
+.xlrh-assist-btn,
+.xlrh-assist-tab,
+.xlrh-assist-error-btn,
+.assistant-error-btn {
+    position: relative;
+    min-width: 0;
+    min-height: 31px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    overflow: hidden;
+    box-sizing: border-box;
+    padding: 0 12px;
+    border: 1px solid var(--xlrh-assist-line);
+    border-radius: 8px;
+    background: rgba(8, 12, 18, 0.5);
+    color: var(--xlrh-assist-text);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    transition: transform 120ms ease, background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.xlrh-assist-btn:hover:not(:disabled),
+.xlrh-assist-tab:hover:not(:disabled),
+.xlrh-assist-error-btn:hover:not(:disabled),
+.assistant-error-btn:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--xlrh-assist-accent) 46%, rgba(255, 255, 255, 0.16));
+    background: rgba(10, 14, 22, 0.78);
+    color: #fff;
+}
+
+.xlrh-assist-btn:active:not(:disabled),
+.xlrh-assist-tab:active:not(:disabled),
+.xlrh-assist-error-btn:active:not(:disabled),
+.assistant-error-btn:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.xlrh-assist-btn:disabled,
+.xlrh-assist-tab:disabled,
+.xlrh-assist-error-btn:disabled,
+.assistant-error-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.54;
+}
+
+.xlrh-assist-tab.is-active,
+.xlrh-assist-btn--primary {
+    border-color: color-mix(in srgb, var(--xlrh-assist-accent) 52%, rgba(255, 255, 255, 0.12));
+    background: color-mix(in srgb, var(--xlrh-assist-accent) 18%, rgba(8, 12, 18, 0.48));
+    color: #fff;
+}
+
+.xlrh-assist-row,
+.xlrh-assist-actions,
+.xlrh-assist-fill-row,
+.xlrh-assist-chat-actions {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.xlrh-assist-row,
+.xlrh-assist-chat-actions {
+    justify-content: space-between;
+}
+
+.xlrh-assist-actions,
+.xlrh-assist-fill-row {
+    width: 100%;
+}
+
+.xlrh-assist-btn--primary,
+.xlrh-assist-btn--fill,
+.xlrh-assist-btn--append,
+.xlrh-assist-btn--save {
+    flex: 1 1 110px;
+}
+
+.xlrh-assist-btn--save {
+    border-color: rgba(116, 217, 159, 0.36);
+    background: rgba(42, 122, 76, 0.22);
+    color: #a8f0bf;
+}
+
+.xlrh-assist-label {
+    color: var(--xlrh-assist-muted);
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.25;
+}
+
+.xlrh-assist-textarea,
+.xlrh-assist-chat-input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid var(--xlrh-assist-line);
+    border-radius: 8px;
+    background: var(--xlrh-assist-bg);
+    color: rgba(255, 255, 255, 0.92);
+    font: inherit;
+    font-size: var(--xlrh-input-font-size, 13px);
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.xlrh-assist-textarea--input,
+.xlrh-assist-chat-input {
+    min-height: 54px;
+    border-style: dashed;
+    border-color: color-mix(in srgb, var(--xlrh-assist-accent) 36%, transparent);
+    background: color-mix(in srgb, var(--xlrh-assist-accent) 9%, rgba(5, 9, 15, 0.52));
+}
+
+.xlrh-assist-textarea:focus,
+.xlrh-assist-chat-input:focus {
+    outline: none;
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--xlrh-assist-accent) 58%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--xlrh-assist-accent) 15%, transparent);
+}
+
+.xlrh-assist-textarea::placeholder,
+.xlrh-assist-chat-input::placeholder {
+    color: rgba(255, 255, 255, 0.34);
+}
+
+.xlrh-assist-textarea--result {
+    min-height: 126px;
+}
+
+.xlrh-assist-result {
+    margin-top: 2px;
+    padding-top: 5px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.xlrh-assist-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.xlrh-assist-thumb {
+    position: relative;
+    flex: 0 0 auto;
+    overflow: visible;
+    animation: xlrh-assist-thumb-on 170ms ease-out both;
+}
+
+.xlrh-assist-thumb.is-removing {
+    pointer-events: none;
+    animation: xlrh-assist-thumb-off 150ms ease-in both;
+}
+
+.xlrh-assist-thumb-img {
+    width: 58px;
+    height: 58px;
+    display: block;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.24);
+}
+
+.xlrh-assist-thumb-remove {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 21px;
+    height: 21px;
+    display: inline-grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 50%;
+    background: rgba(10, 13, 18, 0.93);
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.xlrh-assist-thumb-remove:hover:not(:disabled) {
+    border-color: rgba(255, 132, 132, 0.62);
+    background: rgba(186, 48, 58, 0.93);
+}
+
+.xlrh-assist-btn.is-progress {
+    overflow: hidden;
+}
+
+.xlrh-assist-btn-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    background: color-mix(in srgb, var(--xlrh-assist-accent) 38%, transparent);
+    transition: width 220ms ease;
+}
+
+.xlrh-assist-btn-sheen {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.22) 45%, transparent 75%);
+    animation: xlrh-assist-sheen 1.2s linear infinite;
+}
+
+.xlrh-assist-btn-text {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.xlrh-assist-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.22);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: xlrh-assist-spin 780ms linear infinite;
+}
+
+.xlrh-assist-chat-list {
+    max-height: 210px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.xlrh-assist-msg {
+    max-width: 92%;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.045);
+    font-size: 12px;
+}
+
+.xlrh-assist-msg.is-user {
+    align-self: flex-end;
+    border-right: 3px solid color-mix(in srgb, var(--xlrh-assist-accent) 58%, transparent);
+    background: color-mix(in srgb, var(--xlrh-assist-accent) 16%, transparent);
+}
+
+.xlrh-assist-msg.is-model {
+    align-self: flex-start;
+    border-left: 3px solid color-mix(in srgb, var(--xlrh-assist-accent) 45%, transparent);
+}
+
+.xlrh-assist-msg-role {
+    color: rgba(255, 255, 255, 0.52);
+    font-size: 10px;
+}
+
+.xlrh-assist-msg-text {
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.xlrh-assist-error-overlay,
+.assistant-error-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100020;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+    background: rgba(0, 0, 0, 0.58);
+}
+
+.xlrh-assist-error-dialog,
+.assistant-error-dialog {
+    width: min(360px, 92vw);
+    max-height: 64vh;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    overflow: hidden;
+    border: 1px solid rgba(255, 105, 116, 0.42);
+    border-radius: 8px;
+    background: rgba(29, 20, 23, 0.98);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.44);
+}
+
+.xlrh-assist-error-header,
+.xlrh-assist-error-actions,
+.assistant-error-header,
+.assistant-error-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.xlrh-assist-error-actions,
+.assistant-error-actions {
+    justify-content: flex-end;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 0;
+}
+
+.xlrh-assist-error-header,
+.assistant-error-header {
+    color: #ff9aa5;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.xlrh-assist-error-close,
+.assistant-error-close {
+    width: 24px;
+    height: 24px;
+    display: inline-grid;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.62);
+    cursor: pointer;
+}
+
+.xlrh-assist-error-close:hover,
+.assistant-error-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.xlrh-assist-error-body,
+.assistant-error-body {
+    overflow: auto;
+    padding: 12px;
+    color: rgba(255, 214, 218, 0.92);
+    font-family: Consolas, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.58;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.xlrh-assist-error-btn.primary,
+.xlrh-assist-error-btn--primary,
+.assistant-error-btn.primary {
+    border-color: rgba(255, 118, 130, 0.42);
+    background: rgba(150, 43, 54, 0.36);
+    color: #ffd0d5;
+}
+
+@keyframes xlrh-assist-thumb-on {
+    from { opacity: 0; transform: translate3d(0, 4px, 0) scale(0.96); }
+    to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes xlrh-assist-thumb-off {
+    to { opacity: 0; transform: translate3d(0, 4px, 0) scale(0.94); }
+}
+
+@keyframes xlrh-assist-sheen {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(100%); }
+}
+
+@keyframes xlrh-assist-spin {
+    to { transform: rotate(360deg); }
+}

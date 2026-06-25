@@ -1,0 +1,28 @@
+.tabbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    background: rgba(18, 20, 26, 0.72);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    box-sizing: border-box;
+}
+
+.tabsection {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 0;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.tabsection:nth-of-type(2) {
+    justify-content: flex-end;
+}
+
+.tabsection > * {
+    margin: 0;
+}

@@ -1,0 +1,62 @@
+.opt-section {
+    position: relative;
+    z-index: 100;
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+    overflow: visible;
+}
+
+.opt-row,
+.opt-col-item {
+    position: relative;
+    min-width: 0;
+}
+
+.opt-row {
+    z-index: 20;
+    width: 100%;
+}
+
+.opt-flex-2col {
+    position: relative;
+    z-index: 30;
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+}
+
+.opt-count-row .xlrh-param-select-box {
+    z-index: 12;
+}
+
+.opt-count-content {
+    cursor: default;
+    flex-wrap: nowrap;
+}
+
+.opt-count-content .xlrh-stepper {
+    width: 100px;
+    min-width: 100px;
+    max-width: 100px;
+    flex: 0 0 100px;
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.opt-count-content .xlrh-stepper-value,
+.opt-count-content .xlrh-stepper-input {
+    min-width: 0;
+    flex: 1 1 0;
+}
+
+.opt-count-content .xlrh-stepper:hover:not(.xlrh-stepper--disabled) {
+    border-color: rgba(255, 190, 104, 0.24);
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.opt-count-unit {
+    color: rgba(255, 255, 255, 0.72);
+}

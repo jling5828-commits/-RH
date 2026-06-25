@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>小梁RH - 使用说明</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #101114;
+            --panel: #181a20;
+            --panel-2: #20232b;
+            --text: #f4f6fb;
+            --muted: #aeb5c4;
+            --line: rgba(255, 255, 255, 0.12);
+            --accent: #57c7ff;
+            --accent-2: #ffb15f;
+            --good: #60d394;
+        }
+
+        * { box-sizing: border-box; }
+        html, body { margin: 0; min-height: 100%; }
+        body {
+            font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+        }
+
+        .page {
+            width: min(980px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 38px 0 52px;
+        }
+
+        .hero {
+            padding: 28px;
+            border: 1px solid var(--line);
+            background: linear-gradient(135deg, rgba(87, 199, 255, 0.14), rgba(255, 177, 95, 0.1)), var(--panel);
+            border-radius: 10px;
+        }
+
+        h1, h2, h3, p { margin-top: 0; }
+        h1 { margin-bottom: 8px; font-size: 32px; letter-spacing: 0; }
+        h2 { margin: 34px 0 12px; font-size: 22px; }
+        h3 { margin: 20px 0 8px; font-size: 16px; color: var(--accent); }
+        p { color: var(--muted); }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            height: 26px;
+            padding: 0 10px;
+            margin-bottom: 12px;
+            border-radius: 999px;
+            background: rgba(87, 199, 255, 0.14);
+            color: #c9efff;
+            font-size: 13px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .card {
+            padding: 18px;
+            border: 1px solid var(--line);
+            background: var(--panel);
+            border-radius: 8px;
+        }
+
+        .card strong { color: var(--text); }
+        ul, ol { margin: 8px 0 0; padding-left: 22px; color: var(--muted); }
+        li + li { margin-top: 6px; }
+        code {
+            padding: 2px 5px;
+            border-radius: 4px;
+            background: var(--panel-2);
+            color: #d6f3ff;
+        }
+
+        .note {
+            padding: 14px 16px;
+            margin-top: 14px;
+            border-left: 3px solid var(--accent-2);
+            background: rgba(255, 177, 95, 0.1);
+            color: #ffe1bd;
+        }
+
+        .ok { color: var(--good); }
+        footer {
+            margin-top: 38px;
+            padding-top: 18px;
+            border-top: 1px solid var(--line);
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        @media (max-width: 720px) {
+            .page { width: min(100% - 20px, 980px); padding-top: 20px; }
+            .hero { padding: 22px; }
+            .grid { grid-template-columns: 1fr; }
+            h1 { font-size: 26px; }
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <section class="hero">
+            <div class="tag">小梁RH for Photoshop</div>
+            <h1>小梁RH 使用说明</h1>
+            <p>
+                小梁RH用于在 Photoshop 中调用 RunningHub AI 应用、上传当前图像或选区、提交任务、保存返图并贴回画布。
+            </p>
+        </section>
+
+        <h2>快速开始</h2>
+        <div class="grid">
+            <div class="card">
+                <h3>1. 配置 API Key</h3>
+                <p>进入设置页，在 API Key 区填写个人 Key 或企业共享 Key，并选择当前使用的 Key 类型。</p>
+            </div>
+            <div class="card">
+                <h3>2. 选择 AI 应用</h3>
+                <p>在 AI 应用列表中选择要运行的应用。可以导入集合包，也可以获取当前账号下的应用封面。</p>
+            </div>
+            <div class="card">
+                <h3>3. 准备输入</h3>
+                <p>按应用参数要求填写提示词、数字、选项，并在图像字段中选择当前画布、图层、选区或本地文件。</p>
+            </div>
+            <div class="card">
+                <h3>4. 提交任务</h3>
+                <p>点击开始运行。任务提交成功后可以继续提交新任务，返图会按完成顺序保存并回传到 Photoshop。</p>
+            </div>
+        </div>
+
+        <h2>图像上传</h2>
+        <div class="card">
+            <ul>
+                <li>上传长边可在设置交互卡片中选择，支持 <code>512</code>、<code>1024</code>、<code>2048</code>、<code>4096</code> 档位。</li>
+                <li>默认按原图内容导出上传；质量、尺寸和格式以当前插件设置为准。</li>
+                <li>图像字段支持主图、参考图等多种 RunningHub 应用输入。</li>
+            </ul>
+        </div>
+
+        <h2>小黄鸭解码</h2>
+        <div class="card">
+            <p>顶栏的小黄鸭按钮用于开启或关闭本地解码。</p>
+            <ul>
+                <li>开启后，回图无论是否为小黄鸭图，都会先尝试本地解码。</li>
+                <li>解码成功会保存并回传解码后的图片。</li>
+                <li>解码失败会保留并回传原图，状态栏会提示失败原因。</li>
+            </ul>
+        </div>
+
+        <h2>返图与缓存</h2>
+        <div class="card">
+            <ul>
+                <li>默认返图目录为插件数据目录下的 <code>image_cache</code>。</li>
+                <li>可以在设置交互卡片中自定义返图文件夹，或打开当前返图缓存文件夹。</li>
+                <li>清空返图列表时，只会删除小梁RH生成的返图，不会删除文件夹内其它个人文件。</li>
+                <li>小梁RH返图文件名会带有 <code>小梁RH</code> 标记，便于安全识别和清理。</li>
+            </ul>
+            <div class="note">如果把返图文件夹设为桌面，清理逻辑也只会处理小梁RH生成的返图。</div>
+        </div>
+
+        <h2>任务队列</h2>
+        <div class="card">
+            <ul>
+                <li>插件支持并发任务，当前上限按设置控制。</li>
+                <li>任务队列会显示运行状态、完成结果和耗时信息。</li>
+                <li>任务完成后会尽量计算本次消耗，并在队列中显示 RH 币或余额变化。</li>
+            </ul>
+        </div>
+
+        <h2>常见问题</h2>
+        <div class="card">
+            <h3>提示算力不足怎么办？</h3>
+            <p>请确认当前 Key 权限、账号余额、企业共享扣费权限，以及该 AI 应用是否支持当前 Key 扣费。</p>
+
+            <h3>返图没有贴回 Photoshop？</h3>
+            <p>先查看状态栏提示，再检查返图缓存文件夹是否已有图片。如果图片已保存但未贴回，通常是 Photoshop 当前文档、选区或图层状态发生了变化。</p>
+
+            <h3>打开缓存文件夹无响应？</h3>
+            <p>可以先确认设置页显示的返图目录是否存在。插件会优先打开当前选择的返图目录，默认目录是插件自己的 <code>PluginData/image_cache</code>。</p>
+        </div>
+
+        <footer>
+            <span class="ok">小梁RH</span> · RunningHub AI 应用工作流插件
+        </footer>
+    </main>
+</body>
+</html>

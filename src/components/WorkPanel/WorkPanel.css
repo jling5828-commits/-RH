@@ -1,0 +1,40 @@
+@import "../shared/xlrhCardStack.css";
+
+.work-panel-root {
+    contain: layout style;
+}
+
+.work-panel-root,
+.work-container {
+    inline-size: 100%;
+    min-block-size: 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.work-panel-root,
+.work-container-scrollbar {
+    flex: 1 1 auto;
+}
+
+.work-container {
+    padding: 6px;
+    background-color: transparent;
+}
+
+.work-container-scrollbar {
+    min-block-size: 0;
+    overflow-x: clip;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    box-sizing: border-box;
+}
+
+.work-container-scrollbar::-webkit-scrollbar {
+    inline-size: 0;
+    block-size: 0;
+}

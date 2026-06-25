@@ -1,0 +1,203 @@
+.xlrh-upload-settings {
+    display: grid;
+    gap: 10px;
+}
+
+.xlrh-upload-setting-block {
+    display: grid;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.11);
+}
+
+.xlrh-upload-setting-block:first-child {
+    padding-top: 0;
+    border-top: 0;
+}
+
+.xlrh-upload-setting-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 18px;
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.82);
+}
+
+.xlrh-upload-setting-aside {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(170, 216, 205, 0.78);
+}
+
+.xlrh-upload-format-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.xlrh-upload-format-card {
+    display: grid;
+    gap: 3px;
+    min-height: 48px;
+    padding: 8px 9px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.055);
+    color: rgba(255, 255, 255, 0.78);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.14s ease, background 0.14s ease, color 0.14s ease;
+}
+
+.xlrh-upload-format-card:hover {
+    border-color: rgba(170, 216, 205, 0.4);
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.94);
+}
+
+.xlrh-upload-format-card.is-selected {
+    border-color: rgba(92, 211, 185, 0.72);
+    background: rgba(92, 211, 185, 0.14);
+    color: #ffffff;
+}
+
+.xlrh-upload-format-name {
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.15;
+}
+
+.xlrh-upload-format-desc {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+    line-height: 1.2;
+    color: rgba(255, 255, 255, 0.52);
+}
+
+.xlrh-upload-range-line {
+    display: grid;
+    gap: 7px;
+}
+
+.xlrh-upload-range-caption,
+.xlrh-upload-static-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 24px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.055);
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.xlrh-upload-range-caption strong,
+.xlrh-upload-static-row strong {
+    flex: 0 0 auto;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.xlrh-upload-range-control {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) 26px;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.48);
+}
+
+.xlrh-upload-range-control span:last-child {
+    text-align: right;
+}
+
+.xlrh-upload-slider {
+    width: 100%;
+    height: 4px;
+    border-radius: 999px;
+    outline: none;
+    background: linear-gradient(90deg, rgba(92, 211, 185, 0.85), rgba(245, 187, 89, 0.8));
+    appearance: none;
+}
+
+.xlrh-upload-slider::-webkit-slider-thumb {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.92);
+    border-radius: 50%;
+    background: #2fc7a4;
+    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.32);
+    appearance: none;
+}
+
+.xlrh-upload-slider::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.92);
+    border-radius: 50%;
+    background: #2fc7a4;
+}
+
+.xlrh-upload-inline-toggle {
+    padding: 2px 7px;
+    border: 1px solid rgba(170, 216, 205, 0.34);
+    border-radius: 999px;
+    background: rgba(170, 216, 205, 0.08);
+    color: rgba(214, 246, 238, 0.92);
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.xlrh-upload-inline-toggle:hover {
+    background: rgba(170, 216, 205, 0.16);
+}
+
+.xlrh-upload-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 2px;
+}
+
+.xlrh-upload-primary,
+.xlrh-upload-ghost {
+    min-height: 28px;
+    border-radius: 7px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.xlrh-upload-primary {
+    padding: 0 12px;
+    border: 1px solid rgba(92, 211, 185, 0.62);
+    background: rgba(92, 211, 185, 0.2);
+    color: #f5fffc;
+}
+
+.xlrh-upload-primary:hover {
+    background: rgba(92, 211, 185, 0.28);
+}
+
+.xlrh-upload-ghost {
+    padding: 0 10px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.66);
+}
+
+.xlrh-upload-ghost:hover {
+    color: rgba(255, 255, 255, 0.92);
+    background: rgba(255, 255, 255, 0.08);
+}

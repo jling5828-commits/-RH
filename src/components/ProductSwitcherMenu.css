@@ -1,0 +1,106 @@
+.xlrh-product-menu {
+    position: relative;
+    z-index: 2;
+    flex: 0 0 auto;
+}
+
+.xlrh-product-menu.is-open {
+    z-index: 4;
+}
+
+.xlrh-product-menu-trigger {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: inherit;
+    background: transparent;
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+.xlrh-product-menu-trigger:hover {
+    color: #282124;
+    border-color: rgba(0, 0, 0, 0.12);
+    background: rgba(255, 255, 255, 0.44);
+}
+
+.xlrh-product-menu-popover {
+    --xlrh-product-accent: var(--xlrh-bar-topbar, #ffb7c5);
+    display: grid;
+    gap: 5px;
+    min-width: 176px;
+    padding: 8px;
+    border: 1px solid rgba(24, 20, 22, 0.12);
+    border-radius: 9px;
+    background: #fff;
+    box-shadow: 0 14px 32px rgba(30, 24, 27, 0.16), 0 0 0 1px color-mix(in srgb, var(--xlrh-product-accent) 20%, transparent);
+}
+
+.xlrh-product-menu-item {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 38px;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: 7px;
+    color: #332b2e;
+    background: transparent;
+    box-sizing: border-box;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+}
+
+.xlrh-product-menu-item:hover {
+    background: color-mix(in srgb, var(--xlrh-product-accent) 20%, #fff);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--xlrh-product-accent) 30%, rgba(0, 0, 0, 0.08));
+}
+
+.xlrh-product-menu-item.is-current {
+    background: color-mix(in srgb, var(--xlrh-product-accent) 18%, #fff);
+    box-shadow: inset 3px 0 0 var(--xlrh-product-accent);
+}
+
+.xlrh-product-menu-item.is-current:hover {
+    background: color-mix(in srgb, var(--xlrh-product-accent) 25%, #fff);
+}
+
+.xlrh-product-menu-mark {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(0, 0, 0, 0.09);
+    border-radius: 7px;
+    color: color-mix(in srgb, var(--xlrh-product-accent) 58%, #504346);
+    background: rgba(0, 0, 0, 0.055);
+    box-sizing: border-box;
+}
+
+.xlrh-product-menu-item:hover .xlrh-product-menu-mark,
+.xlrh-product-menu-item.is-current .xlrh-product-menu-mark {
+    border-color: color-mix(in srgb, var(--xlrh-product-accent) 45%, rgba(0, 0, 0, 0.12));
+    background: color-mix(in srgb, var(--xlrh-product-accent) 24%, rgba(0, 0, 0, 0.05));
+}
+
+.xlrh-product-menu-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.xlrh-product-rh-glyph {
+    display: block;
+    width: 18px;
+    height: 18px;
+}

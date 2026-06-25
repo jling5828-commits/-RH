@@ -1,0 +1,299 @@
+.xlrh-about {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-sizing: border-box;
+    color: rgba(255, 255, 255, 0.9);
+    background: var(--uxp-host-background-color, #202124);
+    font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+}
+
+.xlrh-about__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 14px;
+    box-sizing: border-box;
+}
+
+.xlrh-about__masthead {
+    display: grid;
+    grid-template-columns: 54px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.055);
+    box-sizing: border-box;
+}
+
+.xlrh-about__mark {
+    width: 54px;
+    height: 54px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    color: var(--xlrh-accent, #82b7ff);
+    background: rgba(130, 183, 255, 0.1);
+    border: 1px solid rgba(130, 183, 255, 0.28);
+    box-sizing: border-box;
+}
+
+.xlrh-about__mark-icon {
+    width: 34px;
+    height: 34px;
+    display: block;
+}
+
+.xlrh-about__titlebox {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+        "eyebrow version"
+        "title version";
+    column-gap: 10px;
+    row-gap: 4px;
+    align-items: center;
+}
+
+.xlrh-about__eyebrow {
+    grid-area: eyebrow;
+    color: rgba(255, 255, 255, 0.56);
+    font-size: 11px;
+    line-height: 1.3;
+}
+
+.xlrh-about__title {
+    grid-area: title;
+    min-width: 0;
+    margin: 0;
+    color: #fff;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0;
+}
+
+.xlrh-about__version {
+    grid-area: version;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 0 9px;
+    border-radius: 6px;
+    border: 1px solid rgba(130, 183, 255, 0.36);
+    color: rgba(225, 239, 255, 0.95);
+    background: rgba(130, 183, 255, 0.14);
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.xlrh-about__section,
+.xlrh-about__creator,
+.xlrh-about__tip,
+.xlrh-about__runtime {
+    margin-bottom: 10px;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.045);
+    box-sizing: border-box;
+}
+
+.xlrh-about__line {
+    display: grid;
+    grid-template-columns: 8px minmax(0, 1fr);
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.xlrh-about__line:first-child {
+    padding-top: 0;
+}
+
+.xlrh-about__line:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+
+.xlrh-about__line-dot {
+    width: 8px;
+    height: 8px;
+    margin-top: 5px;
+    border-radius: 999px;
+    background: var(--xlrh-accent, #82b7ff);
+    box-shadow: 0 0 0 3px rgba(130, 183, 255, 0.12);
+}
+
+.xlrh-about__line-title,
+.xlrh-about__creator-name {
+    color: rgba(255, 255, 255, 0.94);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.xlrh-about__line-text,
+.xlrh-about__contact-row,
+.xlrh-about__tip,
+.xlrh-about__copyright,
+.xlrh-about__runtime-value {
+    color: rgba(255, 255, 255, 0.64);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.xlrh-about__creator {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+}
+
+.xlrh-about__avatar-wrap {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.xlrh-about__avatar {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.xlrh-about__creator-main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.xlrh-about__contact-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px 10px;
+}
+
+.xlrh-about__contact-row span {
+    white-space: nowrap;
+}
+
+.xlrh-about__tip-button {
+    min-height: 30px;
+    padding: 0 11px;
+    border: 1px solid rgba(130, 183, 255, 0.36);
+    border-radius: 7px;
+    color: rgba(245, 249, 255, 0.95);
+    background: rgba(130, 183, 255, 0.13);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.xlrh-about__tip-button:hover {
+    background: rgba(130, 183, 255, 0.2);
+}
+
+.xlrh-about__tip {
+    margin-top: -2px;
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.xlrh-about__tip p {
+    margin: 0 0 8px;
+}
+
+.xlrh-about__qr-wrap {
+    display: flex;
+    justify-content: center;
+}
+
+.xlrh-about__qr {
+    width: min(176px, 82%);
+    max-height: 220px;
+    padding: 4px;
+    border-radius: 8px;
+    background: #fff;
+    object-fit: contain;
+    box-sizing: border-box;
+}
+
+.xlrh-about__runtime {
+    margin-bottom: 0;
+    display: grid;
+    gap: 7px;
+}
+
+.xlrh-about__runtime-item {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 8px;
+    align-items: baseline;
+}
+
+.xlrh-about__runtime-label {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 11px;
+}
+
+.xlrh-about__runtime-value {
+    min-width: 0;
+    word-break: break-all;
+    font-family: "Consolas", "Microsoft YaHei", monospace;
+}
+
+.xlrh-about__footer {
+    flex: 0 0 auto;
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.16);
+    box-sizing: border-box;
+}
+
+.xlrh-about__copyright {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (max-width: 430px) {
+    .xlrh-about__masthead,
+    .xlrh-about__creator,
+    .xlrh-about__footer {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+    }
+
+    .xlrh-about__footer {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .xlrh-about__tip-button {
+        width: 100%;
+    }
+}

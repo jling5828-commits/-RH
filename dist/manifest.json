@@ -1,0 +1,83 @@
+{
+  "manifestVersion": 5,
+  "main": "index.html",
+  "id": "XiaoLiangRH",
+  "name": "小梁RH",
+  "version": "1.0.5",
+  "host": {
+    "minVersion": "25.0.0",
+    "app": "PS"
+  },
+  "entrypoints": [
+    {
+      "id": "xiaoliangRhPanel",
+      "type": "panel",
+      "label": {
+        "default": "小梁RH"
+      },
+      "preferredFloatingSize": {
+        "height": 1360,
+        "width": 580
+      },
+      "preferredDockedSize": {
+        "height": 1360,
+        "width": 580
+      },
+      "minimumSize": {
+        "height": 400,
+        "width": 325
+      },
+      "maximumSize": {
+        "height": 2000,
+        "width": 9999
+      },
+      "icons": [
+        {
+          "path": "icons/icon.png",
+          "width": 23,
+          "height": 23,
+          "scale": [1, 2],
+          "theme": ["darkest", "dark", "medium", "lightest", "light"]
+        }
+      ]
+    }
+  ],
+  "icons": [
+    {
+      "path": "icons/icon.png",
+      "width": 23,
+      "height": 23,
+      "scale": [1, 2],
+      "theme": ["darkest", "dark", "medium", "lightest", "light"],
+      "species": ["pluginList"]
+    }
+  ],
+  "requiredPermissions": {
+    "localFileSystem": "fullAccess",
+    "allowCodeGenerationFromStrings": true,
+    "imaging": {
+      "imagePix": "readAndWrite"
+    },
+    "launchProcess": {
+      "extensions": [".cmd", ".exe", ".html", ".jpeg", ".jpg", ".png", ".svg", ".url", ""],
+      "schemes": ["https", "http", "file"]
+    },
+    "network": {
+      "domains": "all"
+    },
+    "webview": {
+      "allow": "yes",
+      "allowLocalRendering": "yes",
+      "enableMessageBridge": "localAndRemote",
+      "domains": [
+        "all",
+        "http://localhost:*",
+        "https://localhost:*",
+        "ws://localhost:*",
+        "http://127.0.0.1:*",
+        "https://127.0.0.1:*",
+        "ws://127.0.0.1:*"
+      ]
+    }
+  }
+}

@@ -1,0 +1,72 @@
+.history-panel-inner {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+    min-height: 200px;
+    box-sizing: border-box;
+}
+
+.history-panel-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    width: 100%;
+    min-width: 0;
+}
+
+.history-panel-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 26px;
+    padding: 0 7px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.045);
+    color: rgba(255, 255, 255, 0.62);
+    cursor: default;
+    font-size: 11px;
+    line-height: 1.15;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.history-panel-tab:hover {
+    border-color: rgba(143, 184, 255, 0.36);
+    background: rgba(143, 184, 255, 0.08);
+    color: rgba(255, 255, 255, 0.86);
+}
+
+.history-panel-tab.active {
+    border-color: rgba(143, 184, 255, 0.58);
+    background: rgba(143, 184, 255, 0.15);
+    color: #fff;
+}
+
+.history-panel-list {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.history-panel-list .xlrh-ledger {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.history-panel-list .xlrh-ledger-scroll {
+    max-height: min(400px, calc(100vh - 200px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .history-panel-tab {
+        transition: none;
+    }
+}

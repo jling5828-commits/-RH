@@ -1,0 +1,52 @@
+.mute-btn-header.icon-btn-header {
+    --xlrh-mute-size: 20px;
+    inline-size: var(--xlrh-mute-size);
+    block-size: var(--xlrh-mute-size);
+    min-inline-size: var(--xlrh-mute-size);
+    min-block-size: var(--xlrh-mute-size);
+    flex: 0 0 var(--xlrh-mute-size);
+    display: grid;
+    place-content: center;
+    padding: 0;
+    box-sizing: border-box;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: transparent;
+    color: color-mix(in srgb, #ffffff 62%, transparent);
+    cursor: pointer;
+    transition:
+        background 140ms ease,
+        border-color 140ms ease,
+        color 140ms ease,
+        transform 80ms ease;
+}
+
+.mute-btn-header.icon-btn-header:hover {
+    background: color-mix(in srgb, #ffffff 11%, transparent);
+    border-color: color-mix(in srgb, #ffffff 16%, transparent);
+    color: color-mix(in srgb, #ffffff 92%, transparent);
+}
+
+.mute-btn-header.icon-btn-header:active {
+    transform: translateY(1px);
+    background: color-mix(in srgb, #ffffff 8%, transparent);
+}
+
+.mute-btn-header.icon-btn-header.muted {
+    color: #ff7f8f;
+}
+
+.mute-btn-header.icon-btn-header.muted:hover {
+    border-color: color-mix(in srgb, #ff7f8f 36%, transparent);
+    color: #ffa1aa;
+}
+
+.mute-btn-header.icon-btn-header svg {
+    inline-size: 14px;
+    block-size: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}

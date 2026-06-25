@@ -1,0 +1,30 @@
+.edit-assistant-panel-inner {
+    display: flex;
+    flex-direction: column;
+    row-gap: 9px;
+    padding-block: 2px;
+}
+
+.edit-assistant-preview-wrap {
+    inline-size: 100%;
+    max-block-size: 124px;
+    overflow: hidden;
+    box-sizing: border-box;
+    border: 1px solid color-mix(in srgb, #ffffff 11%, transparent);
+    border-radius: 7px;
+    background: color-mix(in srgb, #080a0e 28%, transparent);
+}
+
+.edit-assistant-preview {
+    display: block;
+    inline-size: 100%;
+    block-size: auto;
+    max-block-size: 124px;
+    object-fit: contain;
+}
+
+.edit-assistant-result-block .edit-assistant-result-textarea {
+    min-block-size: 320px;
+    max-block-size: 520px;
+    resize: vertical;
+}

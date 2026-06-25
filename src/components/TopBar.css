@@ -1,0 +1,191 @@
+.xlrh-toolbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 42px;
+    padding: 5px 8px;
+    box-sizing: border-box;
+    color: #251f22;
+    background: linear-gradient(180deg, var(--xlrh-topbar-fill, rgba(255, 183, 197, 0.86)), rgba(255, 255, 255, 0.62));
+    border-bottom: 1px solid var(--xlrh-topbar-border, rgba(117, 78, 87, 0.16));
+    user-select: none;
+    overflow: hidden;
+}
+
+.xlrh-toolbar.is-status-open,
+.xlrh-toolbar.is-menu-open {
+    overflow: visible;
+}
+
+.xlrh-toolbar .icon-btn,
+.xlrh-toolbar-btn {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid rgba(40, 30, 34, 0.12);
+    border-radius: 7px;
+    color: var(--xlrh-topbar-icon, #33272d);
+    background: rgba(255, 255, 255, 0.34);
+    box-sizing: border-box;
+    cursor: pointer;
+    transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.xlrh-toolbar .icon-btn:hover,
+.xlrh-toolbar-btn:hover {
+    color: var(--xlrh-topbar-icon-hover, #20181c);
+    border-color: rgba(40, 30, 34, 0.2);
+    background: rgba(255, 255, 255, 0.58);
+    transform: translateY(-1px);
+}
+
+.xlrh-toolbar .icon-btn:active,
+.xlrh-toolbar-btn:active {
+    transform: translateY(0);
+    background: rgba(255, 255, 255, 0.28);
+}
+
+.xlrh-toolbar .icon-btn svg,
+.xlrh-toolbar-btn svg {
+    display: block;
+    fill: none;
+    stroke: currentColor;
+}
+
+.xlrh-toolbar-status {
+    display: grid;
+    grid-template-columns: 9px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: 30px;
+    padding: 0 11px;
+    border: 1px solid rgba(45, 32, 37, 0.1);
+    border-radius: 999px;
+    color: #2c2227;
+    background: rgba(255, 255, 255, 0.4);
+    box-sizing: border-box;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.xlrh-toolbar-status:hover {
+    border-color: rgba(45, 32, 37, 0.18);
+    background: rgba(255, 255, 255, 0.6);
+}
+
+.xlrh-toolbar-status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #36c275;
+    box-shadow: 0 0 0 3px rgba(54, 194, 117, 0.18);
+}
+
+.xlrh-toolbar-status-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.xlrh-status-panel-shade {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50000;
+    border: 0;
+    padding: 0;
+    background: rgba(20, 16, 18, 0.42);
+    cursor: default;
+    animation: xlrh-status-shade-in 0.16s ease-out;
+}
+
+.xlrh-status-panel-shade.is-leaving {
+    animation: xlrh-status-shade-out 0.18s ease-in forwards;
+}
+
+.xlrh-status-panel {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    z-index: 50001;
+    padding: 13px 14px 14px;
+    border: 1px solid rgba(45, 32, 37, 0.12);
+    border-radius: 0 0 9px 9px;
+    color: #2d2428;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 14px 36px rgba(24, 18, 21, 0.18);
+    box-sizing: border-box;
+    animation: xlrh-status-panel-in 0.18s ease-out;
+}
+
+.xlrh-status-panel.is-leaving {
+    animation: xlrh-status-panel-out 0.18s ease-in forwards;
+}
+
+.xlrh-status-panel-kicker {
+    margin-bottom: 3px;
+    color: rgba(45, 32, 37, 0.52);
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.xlrh-status-panel-title {
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.xlrh-status-panel-copy {
+    margin: 6px 0 0;
+    color: rgba(45, 32, 37, 0.68);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.xlrh-status-panel-action {
+    margin-top: 10px;
+    padding: 6px 10px;
+    border: 1px solid rgba(45, 32, 37, 0.14);
+    border-radius: 7px;
+    color: #2a2025;
+    background: rgba(255, 183, 197, 0.36);
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.xlrh-status-panel-action:hover {
+    background: rgba(255, 183, 197, 0.52);
+}
+
+@keyframes xlrh-status-shade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes xlrh-status-shade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+@keyframes xlrh-status-panel-in {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes xlrh-status-panel-out {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-6px); }
+}

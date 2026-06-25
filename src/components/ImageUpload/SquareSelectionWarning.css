@@ -1,0 +1,27 @@
+.xlrh-square-warning-dialog {
+    padding-top: 18px;
+}
+
+.xlrh-square-warning-icon {
+    padding: 8px 0 6px;
+    color: #8ef8ff;
+    font-size: 34px;
+    font-weight: 800;
+    animation: none;
+}
+
+.xlrh-square-warning-note {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.74);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.xlrh-square-warning-actions {
+    padding-top: 18px;
+}

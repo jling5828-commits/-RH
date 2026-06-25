@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: http: https: ws: wss:; img-src 'self' data: blob: http: https:;">
+  <script>
+    (function prepareXlrhBoot() {
+      var rootScope = typeof global !== "undefined" ? global : window;
+      var resizeNeedles = [
+        "ResizeObserver loop completed with undelivered notifications",
+        "ResizeObserver loop limit exceeded"
+      ];
+
+      try { rootScope.screen = rootScope.screen || {}; } catch (error) {}
+      try { if (window.WebSocket) window.WebSocket.prototype.OPEN = 1; } catch (error) {}
+
+      function htmlText(value) {
+        var text = String(value == null ? "" : value);
+        return text.replace(/[<>&]/g, function (char) {
+          return { "<": "&lt;", ">": "&gt;", "&": "&amp;" }[char];
+        });
+      }
+
+      function containsResizeNotice(text) {
+        var source = String(text == null ? "" : text);
+        for (var i = 0; i < resizeNeedles.length; i += 1) {
+          if (source.indexOf(resizeNeedles[i]) !== -1) return true;
+        }
+        return false;
+      }
+
+      function describeBootError(message, error) {
+        return containsResizeNotice(message) || containsResizeNotice(error && error.message);
+      }
+
+      window.__xlrhShowFatal = function showXlrhFatal(title, detail) {
+        var mount = document.getElementById("root") || document.body;
+        if (!mount) return;
+        mount.innerHTML = '<section class="xlrh-boot-error"><div class="xlrh-boot-error-title">'
+          + htmlText(title || "插件加载出错")
+          + '</div><pre>'
+          + htmlText(detail || "未知错误")
+          + '</pre></section>';
+      };
+
+      window.__xlrhIsResizeObserverNotice = describeBootError;
+    })();
+  </script>
+  <style>
+    html,
+    body,
+    #root {
+      width: 100%;
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #1e1e1e;
+    }
+
+    .xlrh-loading {
+      display: grid;
+      place-items: center;
+      height: 100%;
+      color: #9a9a9a;
+      font-family: sans-serif;
+      font-size: 12px;
+    }
+
+    .xlrh-boot-error {
+      box-sizing: border-box;
+      height: 100%;
+      padding: 16px;
+      overflow: auto;
+      background: #292929;
+      color: #ffd6d6;
+      font-family: sans-serif;
+      font-size: 12px;
+    }
+
+    .xlrh-boot-error-title {
+      margin-bottom: 8px;
+      color: #ff9a9a;
+      font-weight: 700;
+    }
+
+    .xlrh-boot-error pre {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.78);
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"><div class="xlrh-loading">小梁RH 加载中...</div></div>
+  <script>
+    window.onerror = function handleXlrhRuntimeError(message, url, line, column, error) {
+      if (window.__xlrhIsResizeObserverNotice && window.__xlrhIsResizeObserverNotice(message, error)) {
+        console.warn("[XLRH] 已忽略 Chromium ResizeObserver 提示:", message);
+        return true;
+      }
+      var detail = error && error.stack ? error.stack : String(message) + " (" + (url || "") + ":" + line + ":" + column + ")";
+      console.error("[XLRH] 未捕获错误", detail);
+      window.__xlrhShowFatal("插件加载出错", detail);
+      return true;
+    };
+
+    window.onunhandledrejection = function handleXlrhPromiseError(event) {
+      var reason = event && event.reason;
+      var detail = reason && reason.stack ? reason.stack : String(reason && reason.message ? reason.message : reason || event);
+      console.error("[XLRH] Promise 未处理", detail);
+      window.__xlrhShowFatal("插件初始化失败", detail);
+    };
+  </script>
+  <script src="app.js"></script>
+</body>
+</html>

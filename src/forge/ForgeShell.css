@@ -1,0 +1,164 @@
+.rh-balance-bar.forge-topbar {
+    background-clip: padding-box;
+    background-position: -1px 0, 0 0;
+    background-size: calc(100% + 2px) 100%, auto;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.1),
+        inset -1px 0 0 rgba(255, 255, 255, 0.1);
+}
+
+.forge-work {
+    min-height: 100vh;
+}
+
+.forge-toolbar .xlrh-param-select-box {
+    grid-column: 1 / -1;
+    min-height: 36px;
+}
+
+.forge-param-fields {
+    gap: 10px;
+}
+
+.forge-text-input {
+    width: 100%;
+    min-height: 34px;
+    box-sizing: border-box;
+    padding: 0 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    outline: none;
+    background: rgba(8, 12, 20, 0.5);
+    color: rgba(255, 255, 255, 0.9);
+    font: inherit;
+    font-size: 12px;
+}
+
+.forge-text-input:focus {
+    border-color: rgba(255, 190, 104, 0.42);
+    background: rgba(10, 16, 26, 0.76);
+}
+
+.forge-mini-btn {
+    min-height: 32px;
+    border: 1px solid rgba(255, 190, 104, 0.22);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.82);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+}
+
+.forge-mini-btn:hover {
+    border-color: rgba(255, 190, 104, 0.42);
+    background: rgba(255, 190, 104, 0.12);
+}
+
+.forge-mini-btn:disabled {
+    cursor: default;
+    opacity: 0.45;
+}
+
+.forge-addon-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.forge-addon-buttons .forge-mini-btn:only-child,
+.forge-addon-single {
+    max-width: 132px;
+}
+
+.forge-prompt-translator {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.forge-prompt-translate-input {
+    min-height: 40px;
+}
+
+.forge-prompt-translate-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.forge-settings-wrap {
+    min-height: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 12px;
+    padding: 8px;
+    box-sizing: border-box;
+}
+
+.forge-settings-wrap .comfy-settings-wrap {
+    padding: 0;
+}
+
+.forge-preset-manager-card {
+    margin: 0;
+    grid-template-rows: auto auto;
+}
+
+.forge-preset-manager-card .card-content {
+    min-block-size: auto;
+    padding: 10px;
+}
+
+.forge-preset-manager-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.forge-preset-manager-btn {
+    min-height: 36px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.09);
+    color: rgba(255, 255, 255, 0.88);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.forge-preset-manager-btn:hover {
+    border-color: rgba(255, 190, 104, 0.42);
+    background: rgba(255, 190, 104, 0.12);
+}
+
+.forge-preset-save-dialog {
+    padding-top: 22px;
+}
+
+.forge-preset-save-dialog .xl-popup-body {
+    width: 100%;
+}
+
+.forge-preset-save-dialog .xl-input-wrapper {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.forge-preset-name-input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+@media (max-width: 460px) {
+    .forge-prompt-translate-actions {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .forge-prompt-translate-actions .forge-mini-btn {
+        min-height: 36px;
+    }
+}

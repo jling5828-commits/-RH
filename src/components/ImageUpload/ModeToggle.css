@@ -1,0 +1,46 @@
+.xlup-mode-group {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.xlup-mode-group.vertical {
+    flex-direction: column;
+}
+
+.xlup-mode-group--segmented {
+    padding: 3px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.48);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+.xlup-mode-btn {
+    min-width: 44px;
+    height: 24px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.72);
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    line-height: 24px;
+    text-align: center;
+    transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.xlup-mode-btn:hover,
+.xlup-mode-btn:focus-visible {
+    color: rgba(255, 255, 255, 0.96);
+    background: rgba(255, 255, 255, 0.08);
+    outline: none;
+}
+
+.xlup-mode-btn.active {
+    color: #fff;
+    background: color-mix(in srgb, var(--xlup-accent, #5ac8fa) 42%, transparent);
+}

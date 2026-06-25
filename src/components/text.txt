@@ -1,0 +1,3 @@
+小梁RH scratch note
+
+This file is intentionally not imported by the plugin runtime. Keep it as a small local marker so legacy text probes do not match older source trees.

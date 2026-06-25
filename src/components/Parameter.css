@@ -1,0 +1,142 @@
+.param-card-inner {
+    --xlrh-param-separator: rgba(255, 255, 255, 0.095);
+    --xlrh-param-caption: rgba(246, 249, 255, 0.52);
+    --xlrh-param-caption-hot: rgba(246, 249, 255, 0.78);
+    --xlrh-param-chip-fg: rgba(255, 255, 255, 0.9);
+    display: flow-root;
+    min-inline-size: 0;
+    contain: layout style;
+    overflow: visible;
+}
+
+.param-section-block {
+    position: relative;
+    min-inline-size: 0;
+    margin: 0;
+    background: none;
+    overflow: visible !important;
+    transform-origin: 50% 0;
+    transition: opacity 160ms ease-out, filter 160ms ease-out, transform 160ms ease-out;
+}
+
+.param-section-block:first-of-type {
+    z-index: 1;
+}
+
+.param-section-block:nth-of-type(3) {
+    z-index: 80;
+}
+
+.section-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-inline-size: 0;
+    column-gap: 8px;
+    margin: 0 0 3px;
+}
+
+.section-label {
+    display: inline-flex;
+    align-items: center;
+    min-inline-size: 0;
+    color: var(--xlrh-param-caption);
+    font-family: Consolas, monospace;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.25;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    transition: color 160ms ease;
+}
+
+.param-section-block:focus-within > .section-label,
+.section-label-row:focus-within .section-label {
+    color: var(--xlrh-param-caption-hot);
+}
+
+.drawer-entry-btns {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+    gap: 4px;
+}
+
+.drawer-entry-btn {
+    --xlrh-drawer-accent: rgba(167, 139, 250, 1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-block-size: 18px;
+    padding: 2px 6px;
+    box-sizing: border-box;
+    border: 1px solid color-mix(in srgb, var(--xlrh-drawer-accent) 46%, transparent);
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--xlrh-drawer-accent) 20%, transparent);
+    color: var(--xlrh-param-chip-fg);
+    cursor: pointer;
+    font-size: 10px;
+    line-height: 1.1;
+    white-space: nowrap;
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 120ms ease;
+}
+
+.drawer-entry-btn:hover {
+    border-color: color-mix(in srgb, var(--xlrh-drawer-accent) 84%, transparent);
+    background: color-mix(in srgb, var(--xlrh-drawer-accent) 38%, transparent);
+    color: #fff;
+}
+
+.drawer-entry-btn:active {
+    transform: translateY(1px);
+}
+
+.drawer-entry-reverse {
+    --xlrh-drawer-accent: var(--xlrh-bar-reverse, #a78bfa);
+}
+
+.drawer-entry-assistant {
+    --xlrh-drawer-accent: var(--xlrh-bar-assistant, #a78bfa);
+}
+
+.drawer-entry-editAssistant {
+    --xlrh-drawer-accent: var(--xlrh-bar-editAssistant, #34d399);
+}
+
+.section-divider {
+    block-size: 1px;
+    margin: 8px 0;
+    border: 0;
+    background: linear-gradient(90deg, transparent, var(--xlrh-param-separator) 12%, var(--xlrh-param-separator) 88%, transparent);
+    opacity: 0.95;
+    transition: opacity 160ms ease, margin 160ms ease;
+}
+
+.optional-placeholder {
+    padding-block: 4px;
+}
+
+.dashed-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 100%;
+    min-block-size: 32px;
+    box-sizing: border-box;
+    border: 1px dashed rgba(255, 255, 255, 0.16);
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.01);
+    color: rgba(255, 255, 255, 0.34);
+    cursor: pointer;
+    font-size: 10px;
+    line-height: 1;
+    text-align: center;
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.dashed-box:hover {
+    border-color: rgba(255, 255, 255, 0.34);
+    background: rgba(255, 255, 255, 0.035);
+    color: rgba(255, 255, 255, 0.64);
+}
