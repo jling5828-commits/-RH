@@ -114,7 +114,7 @@ export async function finalizePlaceWithOptionalEdgeFeather(photoshop, { batchPla
     const { width: docW, height: docH } = positiveDocSize(activeDoc);
     const edgeOpts = parsePlaceEdgeOpts(placeOpts);
     const featherPx = edgeOpts.placeEdgeFeatherAuto ? computeAutoPlaceEdgeFeatherPx(selectedRect) : 0;
-    if (!(featherPx > 0)) return null;
+    if (!(featherPx > 0) && !edgeOpts.placeCreateMask) return null;
     if (edgeOpts.placeEdgeFeatherSubcanvasOnly && isFullCanvasSelBounds(selectedRect, docW, docH)) return null;
 
     const layer = activeDoc.activeLayers?.[0];
@@ -133,6 +133,7 @@ export async function finalizePlaceWithOptionalEdgeFeather(photoshop, { batchPla
         layer,
         bounds: placedBounds,
         featherPx,
+        forceMask: edgeOpts.placeCreateMask,
         logTag: "[XiaoLiangRH PlaceEdge]",
     });
 }

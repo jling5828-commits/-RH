@@ -1,6 +1,6 @@
 import { readCompatLocalStorage } from "./storageKeyCompat.js";
-import { shell as bridgeShell, storage as bridgeStorage } from "../bridge/uxpBridge.js";
-import { pluginChildNativePath, pluginRuntimeHint } from "./pluginRuntimePath.js";
+import { storage as bridgeStorage } from "../bridge/uxpBridge.js";
+import { pluginChildNativePathAsync, pluginRuntimeHint } from "./pluginRuntimePath.js";
 
 const SOUND_MUTED_KEY = "xlrh_sound_muted";
 const SOUND_FOLDER = "voices";
@@ -114,23 +114,18 @@ export async function listSoundFiles() {
 }
 
 export async function openSoundFolder() {
-    const directPath = pluginChildNativePath(SOUND_FOLDER);
-    let directError = null;
-    if (directPath) {
-        try {
-            return await bridgeShell.openPath(directPath);
-        } catch (error) {
-            directError = error;
-        }
-    }
     try {
-        return await bridgeStorage.localFileSystem.openSoundFolder(pluginRuntimeHint());
-    } catch (bridgeError) {
-        const uxp = require("uxp");
-        const shell = uxp.shell;
-        const folder = await soundFolder();
-        if (!folder?.nativePath) throw directError || bridgeError || new Error("voices path unavailable");
-        await shell.openPath(folder.nativePath);
-        return { ok: true, nativePath: folder.nativePath };
+        const res = await bridgeStorage.localFileSystem.openSoundFolder(pluginRuntimeHint());
+        if (res?.nativePath) return res;
+        return { ...(res || { ok: true }), nativePath: await pluginChildNativePathAsync(SOUND_FOLDER) };
+    } catch (error) {
+        if (canReadPluginFiles()) {
+            const uxp = require("uxp");
+            const folder = await soundFolder();
+            if (!folder?.nativePath) throw error;
+            await uxp.shell.openPath(folder.nativePath);
+            return { ok: true, nativePath: folder.nativePath };
+        }
+        throw error;
     }
 }

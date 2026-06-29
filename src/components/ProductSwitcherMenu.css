@@ -5,7 +5,7 @@
 }
 
 .xlrh-product-menu.is-open {
-    z-index: 4;
+    z-index: 100020;
 }
 
 .xlrh-product-menu-trigger {

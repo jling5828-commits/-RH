@@ -8,9 +8,14 @@ const PANEL_ID = "xiaoliangRhPanel";
 const MAIN_WEBVIEW_ID = "app-webview";
 const MAIN_WEBVIEW_SRC = "plugin:/app.html";
 const INVALIDATE_DELAY_MS = 400;
+const DEFAULT_PANEL_WIDTH = 350;
+const DEFAULT_PANEL_HEIGHT = 400;
 
 const panelMenuHandlers = {
-    reloadPanel: () => location.reload(),
+    reloadPanel: () => {
+        resetPanelSizeToDefault();
+        setTimeout(() => location.reload(), 30);
+    },
 };
 
 let panelRoot = null;
@@ -31,14 +36,34 @@ function preparePanelRoot(root) {
         display: "flex",
         flexDirection: "column",
         width: "100%",
+        minWidth: `${DEFAULT_PANEL_WIDTH}px`,
         height: "100vh",
-        minHeight: "100vh",
+        minHeight: `${DEFAULT_PANEL_HEIGHT}px`,
         margin: "0",
         padding: "0",
         overflow: "hidden",
         boxSizing: "border-box",
         background: "#1e1e1e",
     });
+}
+
+function resetNodeMinimumSize(node) {
+    if (!node?.style) return;
+    node.style.minWidth = `${DEFAULT_PANEL_WIDTH}px`;
+    node.style.minHeight = `${DEFAULT_PANEL_HEIGHT}px`;
+}
+
+function resetPanelSizeToDefault() {
+    resetNodeMinimumSize(document.documentElement);
+    resetNodeMinimumSize(document.body);
+    resetNodeMinimumSize(panelHost);
+    resetNodeMinimumSize(panelRoot);
+
+    try {
+        if (typeof window.resizeTo === "function") window.resizeTo(DEFAULT_PANEL_WIDTH, DEFAULT_PANEL_HEIGHT);
+    } catch (error) {
+        console.warn("[XiaoLiangRH Host] panel resizeTo default failed:", error);
+    }
 }
 
 function buildMainWebview() {

@@ -5,7 +5,7 @@ import { extractDownloadUrlFromData } from "../../src/runninghub/rhUploadRespons
 import { runXlrhAiAppJob } from "../../src/runninghub/xlrhRunEngine.js";
 import { PLUGIN_HTTP_USER_AGENT_RH } from "../../src/pluginMeta.js";
 import { webappIdToCanonicalStringHost } from "./runninghubIdsHost.js";
-import { rhJoinUrlHost } from "./runninghubHostHttp.js";
+import { makeRhHostNetworkError, rhJoinUrlHost } from "./runninghubHostHttp.js";
 import { peekUploadSession } from "./xiaoliangRhUploadSessionStore.js";
 import {
     rhCancelTaskHost,
@@ -112,9 +112,10 @@ async function uploadBinaryFromHost(ctx, upload, hooks = {}) {
     const formData = new FormData();
     formData.append("file", new Blob([bytes], { type: mimeType }), upload.fileName || "image.png");
     const abort = timeoutSignal(ctx.signal, ctx.requestTimeoutMs || DEFAULT_UPLOAD_TIMEOUT_MS);
+    const uploadUrl = rhJoinUrlHost(ctx.baseUrl, RH_PATH.UPLOAD_BINARY);
     let response;
     try {
-        response = await fetch(rhJoinUrlHost(ctx.baseUrl, RH_PATH.UPLOAD_BINARY), {
+        response = await fetch(uploadUrl, {
             method: "POST",
             body: formData,
             headers: {
@@ -129,7 +130,7 @@ async function uploadBinaryFromHost(ctx, upload, hooks = {}) {
             timeout.code = "RH_UPLOAD_TIMEOUT";
             throw timeout;
         }
-        throw error;
+        throw makeRhHostNetworkError(uploadUrl, error, { stage: "上传" });
     } finally {
         abort.dispose();
     }

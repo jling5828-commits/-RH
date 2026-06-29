@@ -158,8 +158,14 @@ function resolveRpc(data) {
 
     state.pending.delete(data.id);
     state.progress.delete(data.id);
-    if (data.error) pending.reject(new Error(data.error.message || "Bridge error"));
-    else pending.resolve(data.result);
+    if (data.error) {
+        const error = new Error(data.error.message || "Bridge error");
+        if (data.error.code != null) error.code = data.error.code;
+        if (data.error.status != null) error.status = data.error.status;
+        if (data.error.rawBody != null) error.rawBody = data.error.rawBody;
+        if (data.error.originalMessage != null) error.originalMessage = data.error.originalMessage;
+        pending.reject(error);
+    } else pending.resolve(data.result);
     return true;
 }
 

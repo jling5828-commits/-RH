@@ -23,17 +23,25 @@ export function useSquareSelectionWarning(pushStatus) {
         pending?.resolve?.(false);
     }, [pending]);
 
-    const confirmCaptureSelection = useCallback(async ({ mode = "canvas", clearCapture } = {}) => {
-        if (skipSquareSelectionWarningThisSession) return true;
+    const confirmCaptureSelection = useCallback(async ({ mode = "canvas", clearCapture, requireSelection = false } = {}) => {
         let info = null;
         try {
             info = await getActiveSelectionCaptureInfo(mode);
-        } catch (_) {
+        } catch (error) {
+            if (requireSelection) {
+                pushStatus?.(`读取选区失败：${error?.message || error}`, 5000);
+                return false;
+            }
             return true;
         }
+        if (requireSelection && !info) {
+            pushStatus?.("请先用框选工具框选需要处理的图片区域", 3500);
+            return false;
+        }
+        if (skipSquareSelectionWarningThisSession) return true;
         if (!info || isSquare(info)) return true;
         return new Promise((resolve) => setPending({ info, clearCapture, resolve }));
-    }, []);
+    }, [pushStatus]);
 
     const finish = useCallback((value) => {
         const item = pending;

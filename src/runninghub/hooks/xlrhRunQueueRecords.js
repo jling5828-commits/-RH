@@ -149,6 +149,30 @@ export function appendXlrhRun(runs, entry) {
     return replaceTail ? [...list.slice(0, -1), entry] : [...list, entry];
 }
 
+export function pruneCompletedRhRuns(runs, retainMs = XLRH_RUN_DONE_RETAIN_MS, now = Date.now()) {
+    const list = Array.isArray(runs) ? runs : [];
+    const cutoff = Number(now) - Number(retainMs);
+    let changed = false;
+    const next = [];
+    for (const run of list) {
+        if (!run || run.status === "running" || run.status === "cancelled") {
+            next.push(run);
+            continue;
+        }
+        if (run.status !== "success" && run.status !== "error") {
+            next.push(run);
+            continue;
+        }
+        const completedAt = Number(run.completedAt);
+        if (Number.isFinite(completedAt) && completedAt <= cutoff) {
+            changed = true;
+            continue;
+        }
+        next.push(run);
+    }
+    return changed ? next : list;
+}
+
 function newRhRunId(seed = "") {
     const suffix = Math.random().toString(36).slice(2, 8);
     return seed ? `rh_${seed}_${suffix}` : `rh_${Date.now()}_${suffix}`;

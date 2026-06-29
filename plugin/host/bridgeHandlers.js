@@ -934,7 +934,7 @@ function xiaoliangRhClampRectToDocument(rect, docWidth, docHeight) {
     };
 }
 
-async function xiaoliangRhReadActiveSelectionRect(app, doc) {
+async function xiaoliangRhReadActiveSelectionRect(app, doc, { allowDomFallback = true } = {}) {
     try {
         const selectionInfo = await app.batchPlay([
             {
@@ -951,13 +951,16 @@ async function xiaoliangRhReadActiveSelectionRect(app, doc) {
     } catch (error) {
         console.warn("[XiaoLiangRH capture] selection descriptor unavailable", error);
     }
-    return xiaoliangRhRectFromPsBounds(doc?.selection?.bounds, { requirePositive: true });
+    return allowDomFallback
+        ? xiaoliangRhRectFromPsBounds(doc?.selection?.bounds, { requirePositive: true })
+        : null;
 }
 
 async function xiaoliangRhResolveCaptureBounds(app, doc, opts, docWidth, docHeight) {
     const frozenRect = xiaoliangRhRectFromPsBounds(opts?.frozenBounds || opts?.sourceBounds);
     if (frozenRect) return xiaoliangRhClampRectToDocument(frozenRect, docWidth, docHeight);
     const pickedRect = await xiaoliangRhReadActiveSelectionRect(app, doc);
+    if (opts?.requireSelection && !pickedRect) throw new Error("[NO_SELECTION]请先用框选工具框选需要处理的图片区域");
     const sourceRect = pickedRect || { left: 0, top: 0, right: docWidth, bottom: docHeight };
     return xiaoliangRhClampRectToDocument(sourceRect, docWidth, docHeight);
 }
@@ -1056,20 +1059,23 @@ async function xiaoliangRhOpenShellPath(pathOrUrl) {
     try {
         if (/^[a-zA-Z]:[\\/]/.test(rawPath) || /^\\\\/.test(rawPath)) {
             const opened = await openNativeFolderInHost(rawPath);
-            return { ok: true, opener: opened.opener, attempts: opened.attempts || [] };
+            return { ok: true, nativePath: rawPath, opener: opened.opener, attempts: opened.attempts || [] };
         }
-        await shell.openPath(pathOrUrl);
+        const result = await shell.openPath(pathOrUrl, "小梁RH正在打开文件");
+        if (result) throw new Error(String(result));
         return { ok: true, opener: "uxp" };
     } catch (error) {
         attempts.push(error?.message || String(error));
     }
+    if (/^[a-zA-Z]:[\\/]/.test(rawPath) || /^\\\\/.test(rawPath)) {
+        throw new Error(`openPath failed: ${attempts.join(" / ")}`);
+    }
     try {
-        const childProcess = _dynRequire ? _dynRequire("child_process") : null;
-        if (childProcess?.execFile) {
-            childProcess.execFile("explorer.exe", [rawPath], { windowsHide: true }, () => {});
-            return { ok: true, opener: "explorer" };
+        if (typeof shell.openExternal === "function") {
+            const result = await shell.openExternal(rawPath, "小梁RH正在打开链接");
+            if (result) throw new Error(String(result));
+            return { ok: true, opener: "uxp-external" };
         }
-        attempts.push("child_process unavailable");
     } catch (fallbackError) {
         attempts.push(fallbackError?.message || String(fallbackError));
     }
@@ -1554,6 +1560,9 @@ async function xiaoliangRhExecutePsCaptureSelectionModalCore(mode, sizeOpts) {
             uploadMime = "image/png";
             uploadFormat = "png";
         }
+        const previewBase64 = opts.__previewFromUpload
+            ? await xiaoliangRhBuildPreviewDataUrlFromBytes(uploadBytes, uploadMime, opts.previewMaxEdge || 256)
+            : "";
         const retainUntilRelease = Boolean(opts.__retainUploadSession);
         const uploadSessionId = putUploadSession(uploadBytes, uploadMime, {
             width: pw,
@@ -1574,6 +1583,7 @@ async function xiaoliangRhExecutePsCaptureSelectionModalCore(mode, sizeOpts) {
             mimeType: uploadMime,
             uploadFormat,
             uploadByteLength: uploadBytes.length,
+            ...(previewBase64 ? { previewBase64 } : {}),
             ...(maskUploadBase64
                 ? { maskUploadBase64, maskMin, maskMax }
                 : {}),
@@ -1687,7 +1697,7 @@ export function setupBridge(webviewEl) {
                         if (!doc) return null;
                         const docW = Math.max(1, Math.round(xiaoliangRhNumberFromPsValue(doc.width) || 0));
                         const docH = Math.max(1, Math.round(xiaoliangRhNumberFromPsValue(doc.height) || 0));
-                        let b = await xiaoliangRhReadActiveSelectionRect(app, doc);
+                        let b = await xiaoliangRhReadActiveSelectionRect(app, doc, { allowDomFallback: false });
                         if (!b) return null;
                         b = xiaoliangRhClampRectToDocument(b, docW, docH);
                         let layerID = null;
@@ -2185,7 +2195,13 @@ export function setupBridge(webviewEl) {
                             error = { message: "未知的 runninghub.http.op" };
                         }
                     } catch (e) {
-                        error = { message: e?.message || String(e) };
+                        error = {
+                            message: e?.message || String(e),
+                            code: e?.code,
+                            status: e?.status,
+                            rawBody: e?.rawBody,
+                            originalMessage: e?.originalMessage,
+                        };
                     }
                     break;
                 }
@@ -2689,7 +2705,13 @@ export function setupBridge(webviewEl) {
                     throw new Error("Unknown bridge method: " + method);
             }
         } catch (err) {
-            error = { message: err?.message || String(err) };
+            error = {
+                message: err?.message || String(err),
+                code: err?.code,
+                status: err?.status,
+                rawBody: err?.rawBody,
+                originalMessage: err?.originalMessage,
+            };
         }
 
         sendToWebview(error ? { id, error } : { id, result });

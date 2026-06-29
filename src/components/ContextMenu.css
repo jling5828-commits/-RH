@@ -1,6 +1,6 @@
 .context-menu {
     position: fixed;
-    z-index: 10000;
+    z-index: 100020;
     min-width: 154px;
     max-width: min(292px, calc(100vw - 18px));
     padding: 5px;

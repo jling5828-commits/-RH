@@ -2,10 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import { core, app } from "photoshop";
 import { usePersistedState } from "../hooks/usePersistedState.js";
-import { isInWebView, photoshop, shell as bridgeShell, storage as bridgeStorage, xiaoliangRhPeekUploadSessionRawBase64, xiaoliangRhReleaseUploadSession } from "../bridge/uxpBridge.js";
+import { isInWebView, photoshop, storage as bridgeStorage, xiaoliangRhPeekUploadSessionRawBase64, xiaoliangRhReleaseUploadSession } from "../bridge/uxpBridge.js";
 import { captureAll, computeRhPlaceContextBoundsSync } from "../components/ImageUpload/captureUtils.js";
 import { useSquareSelectionWarning } from "../components/ImageUpload/SquareSelectionWarning.jsx";
 import { CustomSelect } from "../components/CustomSelect.jsx";
+import { TaskPreviewThumb } from "../components/shared/TaskPreviewLightbox.jsx";
 import { SettingsCard } from "../components/settings/SettingsCard.jsx";
 import { EditableSliderValue } from "../components/EditableSliderValue.jsx";
 import { RhImagePreviewField } from "../runninghub/ui/RhImagePreviewField.jsx";
@@ -15,9 +16,16 @@ import { performAutoPlace } from "../utils/autoPlace.js";
 import { notifyResultFilesChanged } from "../utils/resultFilesSync.js";
 import { RESULT_WORKBENCH_FORGE, getEffectiveResultFolderToken } from "../utils/resultFolderTokens.js";
 import { playSound, playSoundFail } from "../utils/playSound.js";
-import { pluginChildNativePath, pluginRuntimeHint } from "../utils/pluginRuntimePath.js";
+import {
+    readAutoReturnEnabled,
+    readConcurrentReturnGroupEnabled,
+    readFailSoundFile,
+    readSuccessSoundFile,
+} from "../utils/sharedInteractionSettings.js";
+import { pluginRuntimeHint } from "../utils/pluginRuntimePath.js";
 import { normalizeRhImageLongEdgeMax } from "../runninghub/rhImageLongEdge.js";
 import { RH_PS_CAPTURE_JPEG_QUALITY, normalizeRhUploadImageFormat, stripBase64FromDataUrl, base64ByteLength, rhCaptureFileName } from "../runninghub/ui/xlrhRhWorkPanelLogic.js";
+import { pruneCompletedRhRuns } from "../runninghub/hooks/xlrhRunQueueRecords.js";
 import { ComfySettings } from "../comfy/ComfyShell.jsx";
 import {
     fetchForgeControlNetModels,
@@ -50,6 +58,7 @@ const FORGE_REPEAT_OPTIONS = [3, 6, 9];
 const NONE_VALUE = "None";
 const FORGE_USER_PRESET_FOLDER = "forge_presets";
 const FORGE_USER_PRESET_PREFIX = "user_";
+const FORGE_PRESET_MIGRATION_KEY = "forge_presets_migrated_to_data_folder_v1";
 
 const IconRefresh = ({ className }) => (
     <svg className={className} width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -86,23 +95,6 @@ const PlayIcon = () => (
         <polygon points="5 3 19 12 5 21 5 3" />
     </svg>
 );
-
-function nextProductMode(activeProduct) {
-    if (activeProduct === "runninghub") return "comfy";
-    if (activeProduct === "comfy") return "forge";
-    return "runninghub";
-}
-
-function ProductModeButton({ activeProduct, onChange }) {
-    const target = nextProductMode(activeProduct);
-    const title = target === "forge" ? "切换到 Forge UI" : target === "comfy" ? "切换到 Comfy UI" : "切换到 RunningHub";
-    const label = activeProduct === "forge" ? "forge ui" : activeProduct === "comfy" ? "comfy ui" : "runninghub";
-    return (
-        <button type="button" className="icon-btn xlrh-product-mode-btn" onClick={() => onChange?.(target)} title={title} aria-label={title}>
-            {label}
-        </button>
-    );
-}
 
 function normalizePlaceContext(ctx) {
     const bounds = ctx?.bounds;
@@ -260,13 +252,17 @@ function safePresetFileName(value) {
     return (clean(value) || "preset").replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 48);
 }
 
-async function getForgePresetFolder() {
-    const pluginFolder = await uxpFs.getPluginFolder();
+async function getForgePresetFolderInfo() {
+    const dataFolder = await uxpFs.getDataFolder();
     try {
-        const existing = await pluginFolder.getEntry(FORGE_USER_PRESET_FOLDER);
-        if (existing?.isFile === false) return existing;
+        const existing = await dataFolder.getEntry(FORGE_USER_PRESET_FOLDER);
+        if (existing?.isFile === false) return { folder: existing, created: false };
     } catch (_) {}
-    return pluginFolder.createFolder(FORGE_USER_PRESET_FOLDER);
+    return { folder: await dataFolder.createFolder(FORGE_USER_PRESET_FOLDER), created: true };
+}
+
+async function getForgePresetFolder() {
+    return (await getForgePresetFolderInfo()).folder;
 }
 
 function normalizeUserPreset(value, fileName) {
@@ -277,7 +273,9 @@ function normalizeUserPreset(value, fileName) {
 }
 
 async function loadForgeUserPresets() {
-    const folder = await getForgePresetFolder();
+    const { folder, created } = await getForgePresetFolderInfo();
+    if (created) await restoreMissingForgeDefaultPresets(folder);
+    await migrateLegacyPluginForgePresets(folder);
     const entries = (await folder.getEntries()).sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN"));
     const out = [];
     for (const entry of entries || []) {
@@ -290,8 +288,8 @@ async function loadForgeUserPresets() {
     return out;
 }
 
-async function restoreMissingForgeDefaultPresets() {
-    const folder = await getForgePresetFolder();
+async function restoreMissingForgeDefaultPresets(targetFolder) {
+    const folder = targetFolder || await getForgePresetFolder();
     const entries = await folder.getEntries();
     const existing = new Set((entries || []).filter((entry) => entry?.isFile !== false).map((entry) => String(entry.name || "")));
     let restored = 0;
@@ -306,6 +304,45 @@ async function restoreMissingForgeDefaultPresets() {
     }
 
     return restored;
+}
+
+function hasMigratedLegacyForgePresets() {
+    try {
+        return localStorage.getItem(FORGE_PRESET_MIGRATION_KEY) === "1";
+    } catch (_) {
+        return false;
+    }
+}
+
+function markLegacyForgePresetsMigrated() {
+    try {
+        localStorage.setItem(FORGE_PRESET_MIGRATION_KEY, "1");
+    } catch (_) {}
+}
+
+async function migrateLegacyPluginForgePresets(targetFolder) {
+    if (hasMigratedLegacyForgePresets()) return 0;
+    const folder = targetFolder || await getForgePresetFolder();
+    let migrated = 0;
+    try {
+        const existingEntries = await folder.getEntries();
+        const existing = new Set((existingEntries || []).filter((entry) => entry?.isFile !== false).map((entry) => String(entry.name || "")));
+        const pluginFolder = await uxpFs.getPluginFolder();
+        const legacyFolder = await pluginFolder.getEntry(FORGE_USER_PRESET_FOLDER);
+        const legacyEntries = await legacyFolder.getEntries();
+        for (const entry of legacyEntries || []) {
+            const fileName = String(entry?.name || "");
+            if (entry?.isFile === false || !/\.json$/i.test(fileName) || existing.has(fileName)) continue;
+            const file = await folder.createFile(fileName, { overwrite: false });
+            await file.write(await entry.read({ format: uxpFormats.utf8 }), { format: uxpFormats.utf8 });
+            existing.add(fileName);
+            migrated += 1;
+        }
+    } catch (_) {
+        // 旧插件目录没有预设时直接跳过。
+    }
+    markLegacyForgePresetsMigrated();
+    return migrated;
 }
 
 async function saveForgeUserPreset(preset) {
@@ -455,7 +492,7 @@ function FieldSelect({ label, value, displayValue, options, onChange, disabled, 
     );
 }
 
-function ForgeTopBar({ activeProduct, onChangeProduct, isSettingsOpen, onToggleView, onRefresh }) {
+function ForgeTopBar({ isSettingsOpen, onToggleView, onRefresh }) {
     const [showHelpPopup, setShowHelpPopup] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const handleRefresh = useCallback(async () => {
@@ -473,7 +510,6 @@ function ForgeTopBar({ activeProduct, onChangeProduct, isSettingsOpen, onToggleV
                     <img src="icons/eye.png" className="rh-balance-icon" alt="" />
                 </div>
                 <div className="rh-balance-bar-right">
-                    <ProductModeButton activeProduct={activeProduct} onChange={onChangeProduct} />
                     <div className="icon-btn" onClick={handleRefresh} title="刷新 Forge 参数">
                         <IconRefresh className={refreshing ? "rh-spinning" : ""} />
                     </div>
@@ -494,7 +530,7 @@ function ForgeTopBar({ activeProduct, onChangeProduct, isSettingsOpen, onToggleV
                             <p className="rh-help-intro">Forge UI 模式用于连接你已经启动的 Stable Diffusion WebUI Forge，在 Photoshop 内提交图生图并保存生成结果。</p>
                             <div className="rh-help-section-title">基础流程</div>
                             <ol className="rh-help-list">
-                                <li>先启动 Forge UI，并确认 WebUI API 可用；本地地址通常是 http://127.0.0.1:7860。</li>
+                                <li>先启动 Forge UI，并确认 WebUI API 可用。</li>
                                 <li>在插件 FG 页填写地址并点击连接，连接成功后会读取模型、采样器、LoRA、ControlNet 列表。</li>
                                 <li>选择预设后按需调整模型、重绘、尺寸、提示词、LoRA 或 ControlNet 参数。</li>
                                 <li>点击捕获图像获取当前 PS 图像，再点击开始运行提交 1 张；×3、×6、×9 会并发提交对应数量。</li>
@@ -522,7 +558,7 @@ function ForgeHome({ state, actions }) {
         <div className="rh-work comfy-work forge-work">
             <div className="rh-work-toolbar comfy-toolbar forge-toolbar">
                 <FieldSelect label="预设" value={state.selectedPresetId} displayValue={state.selectedPresetName} options={state.presetOptions} onChange={actions.selectPreset} getItemLabel={actions.getPresetName} getItemTitle={actions.getPresetName} />
-                <input className="comfy-url-input" value={state.baseUrl} onChange={(e) => actions.setBaseUrl(e.target.value)} placeholder="http://127.0.0.1:7860" />
+                <input className="comfy-url-input" value={state.baseUrl} onChange={(e) => actions.setBaseUrl(e.target.value)} placeholder="请输入 Forge UI 地址" />
                 <button type="button" className="rh-work-btn-primary comfy-connect-btn" onClick={actions.connect} disabled={state.connecting}>
                     {state.connecting ? "连接中" : "连接"}
                 </button>
@@ -715,11 +751,12 @@ function ForgeQueueCard({ runs, onDismiss, onRetryPlace }) {
                         const platform = run.platform || "forge";
                         const isRhRun = platform === "runninghub";
                         const isComfyRun = platform === "comfy";
-                        const platformLabel = isRhRun ? "RunningHub" : isComfyRun ? "Comfy UI" : "Forge UI";
+                        const isBananaRun = platform === "banana";
+                        const platformLabel = isRhRun ? "RunningHub" : isComfyRun ? "Comfy UI" : isBananaRun ? "Banana" : "Forge UI";
                         const snap = run.snapshot && typeof run.snapshot === "object" ? run.snapshot : null;
                         const uploadsForPreview = isRhRun ? snap?.pendingUploads : run.pendingUploads;
                         const previewBase64 = Object.values(uploadsForPreview || {}).find((u) => u?.previewBase64)?.previewBase64;
-                        const taskName = isRhRun ? (snap?.appMetaName || run.presetName || "RunningHub") : isComfyRun ? (run.workflowName || "Comfy UI") : (run.presetName || "Forge UI");
+                        const taskName = isRhRun ? (snap?.appMetaName || run.presetName || "RunningHub") : isComfyRun ? (run.workflowName || "Comfy UI") : isBananaRun ? (`${run.provider || "Banana"} · ${run.model || "Banana"}`) : (run.presetName || "Forge UI");
                         const submitTime = new Date(run.startTime);
                         const timeStr = `${submitTime.getHours().toString().padStart(2, "0")}:${submitTime.getMinutes().toString().padStart(2, "0")}`;
                         const elapsed = run.elapsedSec || 0;
@@ -743,7 +780,7 @@ function ForgeQueueCard({ runs, onDismiss, onRetryPlace }) {
                         };
                         return (
                             <div key={run.id} className="rh-task-item">
-                                {previewBase64 ? <div className="rh-task-thumb"><img src={previewBase64} alt="" className="rh-task-thumb-img" /></div> : <div className="rh-task-thumb" />}
+                                <TaskPreviewThumb src={previewBase64} title="查看任务大图" />
                                 <div className="rh-task-status-wrapper"><div className={`rh-task-status ${statusClass}`} /></div>
                                 <div className="rh-task-info">
                                     <div className="rh-task-name">{taskName}</div>
@@ -783,7 +820,7 @@ export function ForgeShell({
     const allPresets = userPresets;
     const defaultPreset = allPresets[0] || null;
     const [currentPage, setCurrentPage] = useState("home");
-    const [baseUrl, setBaseUrl] = usePersistedState("forge_base_url", "http://127.0.0.1:7860");
+    const [baseUrl, setBaseUrl] = usePersistedState("forge_base_url", "");
     const [selectedPresetId, setSelectedPresetId] = usePersistedState("forge_selected_preset_id", "");
     const selectedPreset = useMemo(() => allPresets.find((item) => item.id === selectedPresetId) || defaultPreset, [allPresets, defaultPreset, selectedPresetId]);
     const [params, setParams] = usePersistedState("forge_params", makeDefaultParams(selectedPreset));
@@ -806,6 +843,15 @@ export function ForgeShell({
     const runAbortRefs = useRef({});
     const autoPlaceQueueRef = useRef(Promise.resolve());
     const taskRunsForQueue = Array.isArray(sharedTaskRuns) ? sharedTaskRuns : runs;
+
+    useEffect(() => {
+        try {
+            const url = new URL(String(baseUrl || "").trim());
+            if (url.hostname === ["127", "0", "0", "1"].join(".") && url.port === "7860") setBaseUrl("");
+        } catch {
+            // Ignore non-URL input while the user is typing.
+        }
+    }, [baseUrl, setBaseUrl]);
 
     useEffect(() => {
         setParams((prev) => ({ ...makeDefaultParams(selectedPreset), ...(prev && typeof prev === "object" ? prev : {}), batch: 1 }));
@@ -841,6 +887,13 @@ export function ForgeShell({
         const timer = setInterval(() => {
             setRuns((prev) => prev.map((run) => run.status === "running" ? { ...run, elapsedSec: elapsedSeconds(run.startTime) } : run));
         }, 500);
+        return () => clearInterval(timer);
+    }, []);
+
+    useEffect(() => {
+        const prune = () => setRuns((prev) => pruneCompletedRhRuns(prev));
+        prune();
+        const timer = setInterval(prune, 1000);
         return () => clearInterval(timer);
     }, []);
 
@@ -887,7 +940,7 @@ export function ForgeShell({
             setBaseUrl(res.baseUrl);
             setConnected(true);
             await refreshRemoteOptions(res.baseUrl);
-            pushStatus(`Forge UI 已连接：${res.baseUrl}`, 3000);
+            pushStatus("Forge UI 已连接", 3000);
         } catch (error) {
             const msg = error?.message || String(error);
             setConnected(false);
@@ -957,32 +1010,25 @@ export function ForgeShell({
     }, [allPresets, defaultPreset, pushStatus, selectedPresetId, setParams, setSelectedPresetId]);
 
     const openUserPresetFolder = useCallback(async () => {
+        let directError = null;
         try {
-            const directPath = pluginChildNativePath(FORGE_USER_PRESET_FOLDER);
-            let directError = null;
-            if (directPath) {
-                try {
-                    await bridgeShell.openPath(directPath);
-                    return;
-                } catch (error) {
-                    directError = error;
-                }
+            try {
+                const res = await bridgeStorage.localFileSystem.openForgePresetFolder(pluginRuntimeHint());
+                const path = String(res?.nativePath || "").trim();
+                pushStatus(path ? `已打开 Forge 预设文件夹：${path}` : "已打开 Forge 预设文件夹", 4000);
+                return;
+            } catch (error) {
+                directError = error;
             }
-            try {
-            await bridgeStorage.localFileSystem.openForgePresetFolder(pluginRuntimeHint());
-            return;
-        } catch (bridgeError) {
-            const folder = await getForgePresetFolder();
-            const path = folder.nativePath;
-            if (!path) throw directError || bridgeError || new Error("forge_presets path unavailable");
-            try {
+            {
+                const folder = await getForgePresetFolder();
+                const path = folder.nativePath;
+                if (!path) throw new Error("forge_presets path unavailable");
                 await uxpShell.openPath(path);
-            } catch (_) {
-                await bridgeShell.openPath(path);
-            }
+                pushStatus(`已打开 Forge 预设文件夹：${path}`, 4000);
             }
         } catch (error) {
-            pushStatus(`打开 Forge 预设文件夹失败：${error?.message || error}`, 5000);
+            pushStatus(`打开 Forge 预设文件夹失败：${directError?.message || error?.message || error}`, 5000);
         }
     }, [pushStatus]);
 
@@ -1062,9 +1108,9 @@ export function ForgeShell({
         setPendingUpload(null);
     }, [pendingUpload]);
 
-    const enqueueAutoPlace = useCallback((savedFileNames, groupName, bounds, placeToken, docId) => {
+    const enqueueAutoPlace = useCallback((savedFileNames, groupName, bounds, placeToken, docId, options = {}) => {
         const prev = autoPlaceQueueRef.current.catch(() => {});
-        const next = prev.then(() => performAutoPlace(savedFileNames, groupName, bounds, placeToken, docId, { force: true }));
+        const next = prev.then(() => performAutoPlace(savedFileNames, groupName, bounds, placeToken, docId, { force: true, group: options.group !== false }));
         autoPlaceQueueRef.current = next.catch(() => {});
         return next;
     }, []);
@@ -1096,6 +1142,7 @@ export function ForgeShell({
         };
         const savedAll = [];
         const pendingPlaceFileNames = [];
+        const groupedAutoPlaceFileNames = [];
         let batchImageTotal = repeats * asInt(params.batch, 1, 1, 16);
         let hadPlaceFailure = false;
         let uploadForRun = initialUpload;
@@ -1123,7 +1170,6 @@ export function ForgeShell({
                 placeToken = folder?.token ?? null;
             }
             if (!folder || !placeToken) throw new Error("无法访问回图缓存");
-            const autoReturnOn = sharedSettings.rhAutoReturnEnabled !== false && sharedSettings.rhAutoReturnEnabled !== "false";
             updateRun(runId, { stageText: repeats > 1 ? `并发提交 ${repeats} 个任务` : "提交 Forge", progress: 30 });
             const progressTimer = setInterval(() => {
                 getForgeProgress(url).then((progress) => {
@@ -1138,11 +1184,15 @@ export function ForgeShell({
             releaseSubmitLock();
             const results = await Promise.all(requests);
             clearInterval(progressTimer);
-            const firstError = results.find((item) => item.error)?.error;
-            if (firstError) throw firstError;
             let completed = 0;
+            const itemFailures = [];
             for (const item of results) {
                 throwIfCancelled();
+                if (item.error) {
+                    itemFailures.push({ index: item.index, message: item.error?.message || String(item.error) });
+                    updateRun(runId, { stageText: repeats > 1 ? `子任务失败 ${itemFailures.length}/${repeats}` : itemFailures[0].message });
+                    continue;
+                }
                 completed += 1;
                 const urls = resultUrlsFromForge(item.result);
                 if (urls.length > 0) batchImageTotal = Math.max(batchImageTotal, urls.length * repeats);
@@ -1159,10 +1209,18 @@ export function ForgeShell({
                 }
                 savedAll.push(...savedFileNames);
                 notifyResultFilesChanged({ folderToken: placeToken });
-                updateRun(runId, { batchDone: savedAll.length, batchImageTotal, placeSavedFileNames: pendingPlaceFileNames.concat(savedFileNames), placeBounds: placeContext?.bounds ?? null, placeToken, placeDocId: placeContext?.docId ?? null, placeGroupName: `${selectedPresetName || "Forge UI"} 生成` });
+                const autoReturnOn = readAutoReturnEnabled();
+                const concurrentGroupOn = readConcurrentReturnGroupEnabled();
+                const pendingForRun = pendingPlaceFileNames.concat(groupedAutoPlaceFileNames, savedFileNames);
+                updateRun(runId, { batchDone: savedAll.length, batchImageTotal, placeSavedFileNames: pendingForRun, placeBounds: placeContext?.bounds ?? null, placeToken, placeDocId: placeContext?.docId ?? null, placeGroupName: `${selectedPresetName || "Forge UI"} 生成`, placeGroupEnabled: repeats > 1 ? concurrentGroupOn : true });
                 if (!autoReturnOn) {
                     pendingPlaceFileNames.push(...savedFileNames);
                     updateRun(runId, { placeStatus: "pending", placeSavedFileNames: pendingPlaceFileNames.slice() });
+                    continue;
+                }
+                if (repeats > 1) {
+                    groupedAutoPlaceFileNames.push(...savedFileNames);
+                    updateRun(runId, { placeStatus: "pending", placeSavedFileNames: pendingPlaceFileNames.concat(groupedAutoPlaceFileNames) });
                     continue;
                 }
                 try {
@@ -1178,12 +1236,37 @@ export function ForgeShell({
                     }
                 }
             }
+            if (savedAll.length === 0 && itemFailures.length > 0) {
+                throw new Error(itemFailures[0]?.message || "Forge 批量任务全部失败");
+            }
+            const finalAutoReturnOn = readAutoReturnEnabled();
+            const finalConcurrentGroupOn = readConcurrentReturnGroupEnabled();
+            if (finalAutoReturnOn && repeats > 1 && groupedAutoPlaceFileNames.length > 0) {
+                updateRun(runId, { stageText: "回传到 PS", progress: 95, placeSavedFileNames: pendingPlaceFileNames.concat(groupedAutoPlaceFileNames) });
+                try {
+                    await enqueueAutoPlace(groupedAutoPlaceFileNames.slice(), `${selectedPresetName || "Forge UI"} 生成`, placeContext?.bounds ?? null, placeToken, placeContext?.docId ?? null, { group: finalConcurrentGroupOn });
+                    groupedAutoPlaceFileNames.length = 0;
+                    updateRun(runId, { placeStatus: pendingPlaceFileNames.length > 0 ? "pending" : "placed", placeSavedFileNames: pendingPlaceFileNames.slice() });
+                } catch (error) {
+                    const canRetry = error && typeof error === "object" && error.canRetry === true;
+                    hadPlaceFailure = true;
+                    if (canRetry) {
+                        pendingPlaceFileNames.push(...groupedAutoPlaceFileNames);
+                        groupedAutoPlaceFileNames.length = 0;
+                        updateRun(runId, { placeStatus: "pending", placeError: error.reason, placeSavedFileNames: pendingPlaceFileNames.slice() });
+                    } else {
+                        updateRun(runId, { placeStatus: pendingPlaceFileNames.length > 0 ? "pending" : "failed", placeError: error?.reason || error?.message || String(error) });
+                    }
+                }
+            }
             const placePatch = pendingPlaceFileNames.length > 0
-                ? { placeStatus: "pending", placeSavedFileNames: pendingPlaceFileNames.slice(), placeBounds: placeContext?.bounds ?? null, placeToken, placeDocId: placeContext?.docId ?? null, placeGroupName: `${selectedPresetName || "Forge UI"} 生成` }
-                : { placeStatus: autoReturnOn ? (hadPlaceFailure ? "failed" : "placed") : "pending" };
+                ? { placeStatus: "pending", placeSavedFileNames: pendingPlaceFileNames.slice(), placeBounds: placeContext?.bounds ?? null, placeToken, placeDocId: placeContext?.docId ?? null, placeGroupName: `${selectedPresetName || "Forge UI"} 生成`, placeGroupEnabled: repeats > 1 ? finalConcurrentGroupOn : true }
+                : { placeStatus: finalAutoReturnOn ? (hadPlaceFailure ? "failed" : "placed") : "pending" };
             updateRun(runId, { status: "success", progress: 100, stageText: "已完成", completedAt: Date.now(), batchDone: savedAll.length, batchImageTotal, ...placePatch });
-            pushStatus(autoReturnOn ? `Forge 已完成并保存 ${savedAll.length} 张` : "Forge 已完成，自动回传已关闭", 6000);
-            playSound({ fileName: sharedSettings.successSoundFile });
+            pushStatus(finalAutoReturnOn
+                ? `Forge 已完成并保存 ${savedAll.length} 张${itemFailures.length > 0 ? `，${itemFailures.length} 个任务失败` : ""}`
+                : `Forge 已完成，自动回传已关闭${itemFailures.length > 0 ? `，${itemFailures.length} 个任务失败` : ""}`, 6000);
+            playSound({ fileName: readSuccessSoundFile(sharedSettings.successSoundFile) });
         } catch (error) {
             const msg = error?.message || String(error);
             const cancelled = runCancelRefs.current[runId] === true;
@@ -1192,7 +1275,7 @@ export function ForgeShell({
             updateRun(runId, { status: cancelled ? "cancelled" : "error", progress: 100, stageText: msg, completedAt: Date.now() });
             if (cancelled) pushStatus("Forge 任务已取消", 3000);
             else {
-                playSoundFail({ fileName: sharedSettings.failSoundFile });
+                playSoundFail({ fileName: readFailSoundFile(sharedSettings.failSoundFile) });
                 pushStatus(`Forge 运行失败：${msg}`, 7000);
             }
         } finally {
@@ -1200,7 +1283,7 @@ export function ForgeShell({
             delete runCancelRefs.current[runId];
             releaseSubmitLock();
         }
-    }, [baseUrl, connected, enqueueAutoPlace, params, pendingUpload, pushStatus, selectedPresetName, sharedSettings.rhAutoReturnEnabled, sharedSettings.uploadImageFormat, sharedSettings.uploadLongEdgeMax, sharedSettings.successSoundFile, sharedSettings.failSoundFile, updateRun]);
+    }, [baseUrl, connected, enqueueAutoPlace, params, pendingUpload, pushStatus, selectedPresetName, sharedSettings.uploadImageFormat, sharedSettings.uploadLongEdgeMax, sharedSettings.successSoundFile, sharedSettings.failSoundFile, updateRun]);
 
     const dismissRun = useCallback((id) => {
         const runItem = runs.find((run) => run.id === id);
@@ -1216,7 +1299,7 @@ export function ForgeShell({
         if (!runItem?.placeSavedFileNames || !runItem.placeToken) return;
         try {
             pushStatus("正在重试贴回图片...", 3000);
-            await enqueueAutoPlace(runItem.placeSavedFileNames, runItem.placeGroupName || "Forge UI 生成", runItem.placeBounds, runItem.placeToken, runItem.placeDocId);
+            await enqueueAutoPlace(runItem.placeSavedFileNames, runItem.placeGroupName || "Forge UI 生成", runItem.placeBounds, runItem.placeToken, runItem.placeDocId, { group: runItem.placeGroupEnabled !== false });
             updateRun(id, { placeStatus: "placed", placeError: null });
             pushStatus("贴回成功", 3000);
         } catch (error) {
@@ -1251,7 +1334,7 @@ export function ForgeShell({
     return (
         <>
             {squareSelectionWarningDialog}
-            <ForgeTopBar activeProduct={activeProduct} onChangeProduct={onChangeProduct} isSettingsOpen={!isHome} onToggleView={() => setCurrentPage((p) => p === "home" ? "settings" : "home")} onRefresh={refreshForgeTopBar} />
+            <ForgeTopBar isSettingsOpen={!isHome} onToggleView={() => setCurrentPage((p) => p === "home" ? "settings" : "home")} onRefresh={refreshForgeTopBar} />
             <div style={{ flex: 1, minHeight: 0, overflow: "visible", display: isHome ? "flex" : "none", flexDirection: "column", background: "transparent" }}>
                 <ForgeHome state={state} actions={actions} />
             </div>

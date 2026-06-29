@@ -1,0 +1,520 @@
+.banana-product-panel,
+.banana-home-panel {
+    inline-size: 100%;
+    max-inline-size: 100%;
+    min-height: 0;
+    box-sizing: border-box;
+    overflow: visible;
+}
+
+.banana-product-panel {
+    min-height: 100%;
+}
+
+.banana-home-panel {
+    flex: 0 0 auto;
+}
+
+.banana-home {
+    inline-size: 100%;
+    max-inline-size: 100%;
+    display: flex;
+    flex: 0 0 auto;
+    min-height: 100vh;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 8px 14px;
+    box-sizing: border-box;
+    font-family: inherit;
+    overflow: visible;
+}
+
+.banana-home > * {
+    inline-size: 100%;
+    max-inline-size: 100%;
+    box-sizing: border-box;
+}
+
+.rh-balance-bar.comfy-topbar.banana-balance-bar {
+    background:
+        linear-gradient(90deg, rgba(var(--rh-theme-start-rgb, 77, 88, 255), 0.72), rgba(var(--rh-theme-end-rgb, 36, 255, 182), 0.72)),
+        rgba(255, 255, 255, 0.08);
+    background-clip: padding-box;
+    background-position: -1px 0, 0 0;
+    background-size: calc(100% + 2px) 100%, auto;
+}
+
+.banana-balance-bar .rh-balance-content {
+    flex: 1 1 auto;
+}
+
+.banana-param-dropdown {
+    position: relative;
+    z-index: 35;
+    width: 100%;
+    overflow: visible;
+}
+
+.banana-param-dropdown.is-open {
+    z-index: 100020;
+}
+
+.banana-param-trigger {
+    position: relative;
+    width: 100%;
+    height: 36px;
+    min-height: 36px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    box-sizing: border-box;
+    padding: 0 34px 0 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    background: rgba(8, 12, 20, 0.5);
+    color: rgba(255, 255, 255, 0.92);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.banana-param-trigger:hover,
+.banana-param-dropdown.is-open .banana-param-trigger {
+    border-color: rgba(255, 190, 104, 0.46);
+    background: rgba(11, 15, 24, 0.86);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+}
+
+.banana-param-trigger-label {
+    min-width: 0;
+    overflow: hidden;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.banana-param-trigger-caret {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    inline-size: 18px;
+    block-size: 18px;
+    display: inline-grid;
+    place-items: center;
+    color: rgba(255, 255, 255, 0.62);
+    line-height: 1;
+    transform: translateY(-50%);
+    transition: color 0.16s ease;
+}
+
+.banana-param-trigger-caret::before {
+    inline-size: 10px;
+    block-size: 6px;
+    display: block;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23fff' d='M0 0h10L5 6z'/%3E%3C/svg%3E") center / 10px 6px no-repeat;
+    content: "";
+    transform: rotate(0deg);
+    transition: transform 0.18s ease;
+}
+
+.banana-param-trigger-caret.is-open {
+    color: rgba(255, 255, 255, 0.94);
+}
+
+.banana-param-trigger:hover .banana-param-trigger-caret,
+.banana-param-dropdown.is-open .banana-param-trigger-caret {
+    color: rgba(255, 255, 255, 0.94);
+}
+
+.banana-param-trigger-caret.is-open::before {
+    transform: rotate(180deg);
+}
+
+.banana-param-menu {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 5px);
+    z-index: 100020;
+    max-height: 0;
+    padding: 0 10px;
+    overflow: hidden;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: rgba(15, 19, 28, 0.98);
+    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+    transform: translateY(-5px);
+    transition: max-height 0.16s ease, padding 0.16s ease, opacity 0.13s ease, transform 0.13s ease, border-color 0.13s ease, visibility 0.13s ease;
+}
+
+.banana-param-dropdown.is-open .banana-param-menu {
+    max-height: 292px;
+    padding: 10px;
+    border-color: rgba(255, 190, 104, 0.24);
+    opacity: 1;
+    pointer-events: auto;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.banana-param-menu--portal {
+    right: auto;
+    bottom: auto;
+    max-height: 292px;
+    padding: 10px;
+    box-sizing: border-box;
+    border-color: rgba(255, 190, 104, 0.24);
+    opacity: 1;
+    pointer-events: auto;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.banana-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    overflow: visible;
+}
+
+.banana-controls .xlrh-param-select-box {
+    min-height: 36px;
+    border-radius: 8px;
+}
+
+.banana-stepper {
+    min-height: 36px;
+    display: grid;
+    grid-template-columns: minmax(58px, auto) minmax(0, 1fr);
+    align-items: center;
+    box-sizing: border-box;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    background: rgba(8, 12, 20, 0.5);
+    color: rgba(255, 255, 255, 0.92);
+}
+
+.banana-stepper:hover {
+    border-color: rgba(90, 200, 250, 0.48);
+    background: rgba(12, 20, 28, 0.68);
+}
+
+.banana-stepper-label {
+    height: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 8px;
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.58);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.banana-stepper-control {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 28px minmax(34px, 1fr) 28px;
+    align-items: center;
+    text-align: center;
+}
+
+.banana-stepper-control button {
+    width: 26px;
+    height: 26px;
+    margin: 0 auto;
+    border: 0;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.86);
+    cursor: pointer;
+    font-size: 17px;
+    line-height: 1;
+}
+
+.banana-stepper-control button:hover:not(:disabled) {
+    background: rgba(255, 190, 104, 0.18);
+    color: #fff;
+}
+
+.banana-stepper-control button:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.banana-stepper-control span {
+    min-width: 0;
+    color: rgba(255, 255, 255, 0.91);
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.banana-route-line,
+.banana-status-route,
+.banana-fixed-route {
+    min-height: 18px;
+    color: rgba(255, 255, 255, 0.58);
+    font-size: 11px;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.banana-status-route,
+.banana-fixed-route {
+    padding: 2px 1px;
+}
+
+.banana-status-bar {
+    gap: 3px;
+}
+
+.banana-status-route {
+    min-height: 14px;
+    padding: 0;
+    font-size: 10px;
+}
+
+.banana-latency-toast {
+    position: absolute;
+    top: -9px;
+    left: 50%;
+    z-index: 30;
+    min-width: 52px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0;
+    pointer-events: none;
+    transform: translate(-50%, 0);
+    animation: banana-latency-pop 1.75s ease both;
+}
+
+.banana-latency-toast.is-ok {
+    border: 1px solid rgba(73, 220, 126, 0.42);
+    background: rgba(16, 80, 44, 0.92);
+    color: #86f3a3;
+}
+
+.banana-latency-toast.is-bad {
+    border: 1px solid rgba(255, 98, 98, 0.42);
+    background: rgba(90, 24, 30, 0.92);
+    color: #ff9a9a;
+}
+
+@keyframes banana-latency-pop {
+    0% { opacity: 0; transform: translate(-50%, 8px); }
+    18% { opacity: 1; transform: translate(-50%, 0); }
+    72% { opacity: 1; transform: translate(-50%, -2px); }
+    100% { opacity: 0; transform: translate(-50%, -13px); }
+}
+
+.banana-capture-card .card-content,
+.banana-prompt-card .card-content {
+    padding: 10px 12px 12px;
+}
+
+.banana-prompt-card {
+    min-height: 0;
+    max-height: 262px;
+    overflow: hidden;
+}
+
+.banana-prompt-preset-btn {
+    min-width: 34px;
+    height: 24px;
+    flex: 0 0 auto;
+    display: inline-grid;
+    place-items: center;
+    margin-left: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.78);
+    cursor: pointer;
+    padding: 0 7px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.banana-prompt-preset-btn:hover,
+.banana-prompt-preset-btn.is-open {
+    border-color: rgba(255, 190, 104, 0.48);
+    background: rgba(255, 190, 104, 0.14);
+    color: rgba(255, 255, 255, 0.96);
+}
+
+.banana-prompt-preset-menu {
+    width: 100%;
+    max-height: inherit;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    box-sizing: border-box;
+    overflow: hidden;
+    border: 1px solid rgba(255, 190, 104, 0.24);
+    border-radius: 8px;
+    background: rgba(15, 19, 28, 0.98);
+    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
+}
+
+.banana-prompt-preset-list {
+    min-height: 42px;
+    overflow-y: auto;
+    padding: 6px;
+}
+
+.banana-prompt-preset-empty {
+    padding: 12px 8px;
+    color: rgba(255, 255, 255, 0.52);
+    font-size: 12px;
+    text-align: center;
+}
+
+.banana-prompt-preset-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 24px;
+    align-items: center;
+    gap: 4px;
+}
+
+.banana-prompt-preset-select,
+.banana-prompt-preset-delete {
+    height: 28px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.86);
+    cursor: pointer;
+}
+
+.banana-prompt-preset-select {
+    min-width: 0;
+    padding: 0 8px;
+    overflow: hidden;
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.banana-prompt-preset-delete {
+    padding: 0;
+    font-size: 15px;
+    line-height: 1;
+}
+
+.banana-prompt-preset-select:hover {
+    background: rgba(255, 190, 104, 0.13);
+}
+
+.banana-prompt-preset-delete:hover {
+    background: rgba(255, 98, 98, 0.16);
+    color: #ff9a9a;
+}
+
+.banana-prompt-preset-save {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 48px;
+    gap: 6px;
+    padding: 7px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.banana-prompt-preset-save input,
+.banana-prompt-preset-save button {
+    height: 30px;
+    box-sizing: border-box;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 12px;
+}
+
+.banana-prompt-preset-save input {
+    min-width: 0;
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    background: rgba(0, 0, 0, 0.22);
+    color: rgba(255, 255, 255, 0.9);
+    padding: 0 8px;
+    outline: none;
+}
+
+.banana-prompt-preset-save input:focus {
+    border-color: rgba(90, 200, 250, 0.48);
+}
+
+.banana-prompt-preset-save button {
+    border: 1px solid rgba(255, 190, 104, 0.36);
+    background: rgba(255, 190, 104, 0.14);
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    padding: 0;
+}
+
+.banana-prompt-preset-save button:disabled {
+    opacity: 0.38;
+    cursor: default;
+}
+
+.banana-prompt-textarea {
+    display: block;
+    width: 100%;
+    min-height: 94px;
+    max-height: 210px;
+    resize: vertical;
+    box-sizing: border-box;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 7px;
+    background: rgba(0, 0, 0, 0.22);
+    color: rgba(255, 255, 255, 0.9);
+    padding: 8px 9px;
+    font: inherit;
+    font-size: 12px;
+    line-height: 1.45;
+    outline: none;
+    overflow-y: auto;
+}
+
+.banana-prompt-textarea:focus {
+    border-color: rgba(90, 200, 250, 0.48);
+}
+
+.banana-account-card {
+    position: relative;
+}
+
+.banana-account-stack {
+    position: relative;
+    gap: 10px;
+}
+
+.banana-query-btn {
+    width: 100%;
+}
+
+.banana-vpn-note {
+    color: rgba(255, 255, 255, 0.62);
+    font-size: 9px;
+    font-weight: 650;
+    line-height: 17px;
+    white-space: nowrap;
+}
+
+.rh-task-platform-badge--banana {
+    color: #d8f26a;
+    border-color: rgba(216, 242, 106, 0.4);
+}

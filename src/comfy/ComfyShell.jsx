@@ -12,40 +12,40 @@ import {
 import { captureAll, computeRhPlaceContextBoundsSync } from "../components/ImageUpload/captureUtils.js";
 import { useSquareSelectionWarning } from "../components/ImageUpload/SquareSelectionWarning.jsx";
 import { CustomSelect } from "../components/CustomSelect.jsx";
+import { TaskPreviewThumb } from "../components/shared/TaskPreviewLightbox.jsx";
 import { EditableSliderValue } from "../components/EditableSliderValue.jsx";
 import { RhImagePreviewField } from "../runninghub/ui/RhImagePreviewField.jsx";
 import { RhParamAutoGrowTextarea } from "../runninghub/ui/RhParamAutoGrowTextarea.jsx";
-import { SettingsCard } from "../components/settings/SettingsCard.jsx";
-import { normalizeRhImageLongEdgeMax, RH_IMAGE_LONG_EDGE_OPTIONS } from "../runninghub/rhImageLongEdge.js";
+import {
+    SharedInteractionSettingsCard,
+    SharedPersonalizationSettingsCard,
+} from "../components/settings/SharedInteractionSettingsCard.jsx";
+import { normalizeRhImageLongEdgeMax } from "../runninghub/rhImageLongEdge.js";
 import { buildRhUploadEstimate } from "../runninghub/rhUploadEstimate.js";
+import { pruneCompletedRhRuns } from "../runninghub/hooks/xlrhRunQueueRecords.js";
 import {
     RH_PS_CAPTURE_JPEG_QUALITY,
     RH_PS_CAPTURE_UPLOAD_FORMAT,
     RH_UPLOAD_DEFAULT_LONG_EDGE,
-    RH_UPLOAD_IMAGE_FORMAT_OPTIONS,
     base64ByteLength,
     normalizeRhUploadImageFormat,
     rhCaptureFileName,
     stripBase64FromDataUrl,
 } from "../runninghub/ui/xlrhRhWorkPanelLogic.js";
-import { saveImageWithBounds, getTempResultFolder, clearResultImageCache } from "../utils/imageSaver.js";
+import { saveImageWithBounds, getTempResultFolder } from "../utils/imageSaver.js";
 import { performAutoPlace } from "../utils/autoPlace.js";
 import { notifyResultFilesChanged } from "../utils/resultFilesSync.js";
 import {
-    RESULT_FOLDER_STORAGE_CHANGED,
     RESULT_WORKBENCH_COMFY,
-    clearOverrideResultFolderToken,
     getEffectiveResultFolderToken,
-    hasWorkbenchFolderOverride,
-    setOverrideResultFolderToken,
 } from "../utils/resultFolderTokens.js";
+import { playSound, playSoundFail } from "../utils/playSound.js";
 import {
-    PLACE_EDGE_FEATHER_CHANGED,
-    notifyPlaceEdgeFeatherChanged,
-    readPlaceEdgeFeatherEnabledFromStorage,
-    readPlaceKeepSelectionFromStorage,
-} from "../utils/placeEdgeFeatherOpts.js";
-import { DEFAULT_FAIL_SOUND, DEFAULT_SUCCESS_SOUND, playSound, playSoundFail } from "../utils/playSound.js";
+    readAutoReturnEnabled,
+    readConcurrentReturnGroupEnabled,
+    readFailSoundFile,
+    readSuccessSoundFile,
+} from "../utils/sharedInteractionSettings.js";
 import {
     cancelComfyPrompt,
     ensureComfyReady,
@@ -80,17 +80,6 @@ const uxpFs = uxpStorage.localFileSystem;
 const COMFY_CLIENT_ID = `xlrh-comfy-${Date.now().toString(36)}`;
 const COMFY_RUN_REPEAT_OPTIONS = [3, 6, 9];
 const XIANGONGYUN_COMFY_IMAGE_URL = "https://www.xiangongyun.com/image/detail/26eefbcd-cc48-4372-b762-5d7140f20cc4?r=2B7Q6T";
-
-function formatUploadLongEdgeLabel(value) {
-    return Number(value) === 0 ? "原比例" : `${value}px`;
-}
-
-function formatCacheBytes(bytes) {
-    const n = Number(bytes || 0);
-    if (!Number.isFinite(n) || n <= 0) return "0 MB";
-    if (n >= 1024 * 1024 * 1024) return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
-    return `${(n / 1024 / 1024).toFixed(2)} MB`;
-}
 
 function normalizePlaceContext(ctx) {
     const bounds = ctx?.bounds;
@@ -195,13 +184,14 @@ function filterComfyResultBySuffix(result, suffix) {
     const urls = Array.isArray(result?.urls) ? result.urls : [];
     const images = Array.isArray(result?.images) ? result.images : [];
     if (!safeSuffix || images.length === 0) return result;
+    const expectedPrefix = `xlrh_${safeSuffix}`;
     const keptUrls = [];
     const keptImages = [];
     const keptRemoteUrls = [];
     const remoteUrls = Array.isArray(result?.remoteUrls) ? result.remoteUrls : [];
     for (let i = 0; i < images.length; i += 1) {
         const name = comfyResultImageName(images[i]);
-        if (!name.includes(safeSuffix)) continue;
+        if (!name.startsWith(expectedPrefix)) continue;
         if (urls[i]) keptUrls.push(urls[i]);
         keptImages.push(images[i]);
         if (remoteUrls[i]) keptRemoteUrls.push(remoteUrls[i]);
@@ -274,7 +264,10 @@ function uploadRecordFromCapture(capture, previousUpload, prefix, placeContext =
 }
 
 function comfyWorkflowUploadId(workflowDetail, selectedWorkflowId) {
-    return workflowDetail?.id || selectedWorkflowId || "";
+    const selected = String(selectedWorkflowId || "");
+    const loaded = String(workflowDetail?.id || "");
+    if (selected && loaded && selected !== loaded) return "";
+    return loaded || selected;
 }
 
 function scopedComfyUpload(record, workflowId, workflowName, rowKey) {
@@ -395,6 +388,26 @@ function filterComfyUploadsForWorkflow(pendingUploads, workflowId) {
     return next;
 }
 
+function assertComfyRunUploads(imageRows, uploads, workflowId) {
+    const runWorkflowId = String(workflowId || "");
+    if (!runWorkflowId) throw new Error("工作流正在加载，请稍后再运行");
+    const seen = new Set();
+    for (const row of imageRows || []) {
+        const key = row?.key || comfyRowKey(row?.nodeId, row?.fieldName);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        const upload = uploads?.[key];
+        if (!upload?.base64) throw new Error(`请重新捕获图像：${row?.label || row?.description || key}`);
+        if (upload?.uploadSessionId) throw new Error("Comfy 上传图像未冻结，请重新捕获后再运行");
+        if (String(upload.workflowId || "") !== runWorkflowId) throw new Error("捕获图像不属于当前工作流，请重新捕获");
+        if (upload.rowKey && String(upload.rowKey) !== String(key)) throw new Error("捕获图像槽位不匹配，请重新捕获");
+    }
+}
+
+function canAutoPlaceComfyResult(placeContext) {
+    return !!(placeContext?.bounds && placeContext.docId != null);
+}
+
 function buildComfyUploadEstimate(imageRows, pendingUploads) {
     const rows = (imageRows || []).map((row) => {
         const key = row?.key || comfyRowKey(row?.nodeId, row?.fieldName);
@@ -471,30 +484,7 @@ const PlayIcon = () => (
     </svg>
 );
 
-function nextProductMode(activeProduct) {
-    if (activeProduct === "runninghub") return "comfy";
-    if (activeProduct === "comfy") return "forge";
-    return "runninghub";
-}
-
-function ProductModeButton({ activeProduct, onChange }) {
-    const target = nextProductMode(activeProduct);
-    const title = target === "forge" ? "切换到 Forge UI" : target === "comfy" ? "切换到 Comfy UI" : "切换到 RunningHub";
-    const label = activeProduct === "forge" ? "forge ui" : activeProduct === "comfy" ? "comfy ui" : "runninghub";
-    return (
-        <button
-            type="button"
-            className="icon-btn xlrh-product-mode-btn"
-            onClick={() => onChange?.(target)}
-            title={title}
-            aria-label={title}
-        >
-            {label}
-        </button>
-    );
-}
-
-function ComfyTopBar({ activeProduct, onChangeProduct, isSettingsOpen, onToggleView, onRefresh }) {
+function ComfyTopBar({ isSettingsOpen, onToggleView, onRefresh }) {
     const [showHelpPopup, setShowHelpPopup] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const handleOpenXiangongyunUrl = useCallback(async (event) => {
@@ -523,7 +513,6 @@ function ComfyTopBar({ activeProduct, onChangeProduct, isSettingsOpen, onToggleV
                     <img src="icons/eye.png" className="rh-balance-icon" alt="" />
                 </div>
                 <div className="rh-balance-bar-right">
-                    <ProductModeButton activeProduct={activeProduct} onChange={onChangeProduct} />
                     <div className="icon-btn" onClick={handleRefresh} title="刷新工作流">
                         <IconRefresh className={refreshing ? "rh-spinning" : ""} />
                     </div>
@@ -547,7 +536,7 @@ function ComfyTopBar({ activeProduct, onChangeProduct, isSettingsOpen, onToggleV
                                 <li>
                                     <span>Comfy UI 云端推荐仙宫云的实例 </span>
                                     <button type="button" className="rh-help-link" onClick={handleOpenXiangongyunUrl}>{XIANGONGYUN_COMFY_IMAGE_URL}</button>
-                                    <span>等待实例创建完成点击控制台【ComfyUI】 蓝色按钮进入界面，复制浏览器顶部的地址到插件即可链接。Comfy UI 本地地址则默认为 http://127.0.0.1:8188 的格式。</span>
+                                    <span>等待实例创建完成点击控制台【ComfyUI】 蓝色按钮进入界面；如进入的是仙宫云 OS，请在 OS 里的 ComfyUI 窗口点击“新窗口/外部打开”，复制新窗口的 container.x-gpu.com 地址到插件。</span>
                                 </li>
                                 <li>连接成功后插件会读取云端节点，并显示服务器工作流列表。</li>
                                 <li>在捕获图像中点击图1获取当前 PS 图像；图2及更多图片按需单独捕获。</li>
@@ -663,7 +652,7 @@ function ComfyHome({ state, actions }) {
                     className="comfy-url-input"
                     value={state.comfyBaseUrl}
                     onChange={(e) => actions.setComfyBaseUrl(e.target.value)}
-                    placeholder="http://127.0.0.1:8188"
+                    placeholder="请输入 Comfy UI 地址"
                 />
                 <button type="button" className="rh-work-btn-primary comfy-connect-btn" onClick={actions.connect} disabled={state.connecting}>
                     {state.connecting ? "链接中" : "链接"}
@@ -774,14 +763,15 @@ function ComfyQueueCard({ runs, onDismiss, onRetryPlace }) {
             <div className={`card-content ${!open ? "collapsed" : ""}`}>
                 <div className="rh-task-queue">
                     {runs.length === 0 ? <div className="rh-task-empty">暂无任务</div> : runs.map((run) => {
-                        const platform = run.platform === "runninghub" ? "runninghub" : run.platform === "forge" ? "forge" : "comfy";
+                        const platform = run.platform === "runninghub" ? "runninghub" : run.platform === "forge" ? "forge" : run.platform === "banana" ? "banana" : "comfy";
                         const isRhRun = platform === "runninghub";
                         const isForgeRun = platform === "forge";
-                        const platformLabel = isRhRun ? "RunningHub" : isForgeRun ? "Forge UI" : "Comfy UI";
+                        const isBananaRun = platform === "banana";
+                        const platformLabel = isRhRun ? "RunningHub" : isForgeRun ? "Forge UI" : isBananaRun ? "Banana" : "Comfy UI";
                         const snap = run.snapshot && typeof run.snapshot === "object" ? run.snapshot : null;
                         const uploadsForPreview = isRhRun ? snap?.pendingUploads : run.pendingUploads;
                         const previewBase64 = Object.values(uploadsForPreview || {}).find((u) => u?.previewBase64)?.previewBase64;
-                        const taskName = isRhRun ? (snap?.appMetaName || run.presetName || "RunningHub") : isForgeRun ? (run.presetName || "Forge UI") : (run.workflowName || "Comfy UI");
+                        const taskName = isRhRun ? (snap?.appMetaName || run.presetName || "RunningHub") : isForgeRun ? (run.presetName || "Forge UI") : isBananaRun ? (`${run.provider || "Banana"} · ${run.model || "Banana"}`) : (run.workflowName || "Comfy UI");
                         const submitTime = new Date(run.startTime);
                         const timeStr = `${submitTime.getHours().toString().padStart(2, "0")}:${submitTime.getMinutes().toString().padStart(2, "0")}`;
                         const elapsed = run.elapsedSec || 0;
@@ -808,7 +798,7 @@ function ComfyQueueCard({ runs, onDismiss, onRetryPlace }) {
                         };
                         return (
                             <div key={run.id} className="rh-task-item">
-                                {previewBase64 ? <div className="rh-task-thumb"><img src={previewBase64} alt="" className="rh-task-thumb-img" /></div> : <div className="rh-task-thumb" />}
+                                <TaskPreviewThumb src={previewBase64} title="查看任务大图" />
                                 <div className="rh-task-status-wrapper"><div className={`rh-task-status ${statusClass}`} /></div>
                                 <div className="rh-task-info">
                                     <div className="rh-task-name">{taskName}</div>
@@ -829,11 +819,13 @@ function ComfyQueueCard({ runs, onDismiss, onRetryPlace }) {
     );
 }
 
-export function ComfySettings({ props, workbenchId = RESULT_WORKBENCH_COMFY, productLabel = "Comfy" }) {
+export function ComfySettings({ props, workbenchId = RESULT_WORKBENCH_COMFY }) {
     const {
         pushStatus,
         rhAutoReturnEnabled,
         setRhAutoReturnEnabled,
+        concurrentReturnGroupEnabled,
+        setConcurrentReturnGroupEnabled,
         uploadLongEdgeMax,
         setUploadLongEdgeMax,
         uploadImageFormat,
@@ -854,6 +846,8 @@ export function ComfySettings({ props, workbenchId = RESULT_WORKBENCH_COMFY, pro
         setCustomBgOpacity,
         customBgBlur,
         setCustomBgBlur,
+        themeMode,
+        setThemeMode,
         textColor,
         setTextColor,
         soundFileOptions,
@@ -861,219 +855,59 @@ export function ComfySettings({ props, workbenchId = RESULT_WORKBENCH_COMFY, pro
         setSuccessSoundFile,
         failSoundFile,
         setFailSoundFile,
+        soundMuted,
+        setSoundMuted,
         onOpenSoundFolder,
         onRefreshSoundFiles,
     } = props;
-    const [placeEdgeFeatherEnabled, setPlaceEdgeFeatherEnabled] = useState(() => readPlaceEdgeFeatherEnabledFromStorage());
-    const [placeKeepSelection, setPlaceKeepSelection] = useState(() => readPlaceKeepSelectionFromStorage());
-    const [folderName, setFolderName] = useState("默认 image_cache");
-    const [hasOverride, setHasOverride] = useState(false);
-    const [clearStep, setClearStep] = useState(0);
-    const [clearing, setClearing] = useState(false);
-    const normalizedUploadLongEdgeMax = normalizeRhImageLongEdgeMax(uploadLongEdgeMax);
-    const uploadLongEdgeIndex = Math.max(0, RH_IMAGE_LONG_EDGE_OPTIONS.findIndex((n) => n === normalizedUploadLongEdgeMax));
-    const uploadImageFormatValue = normalizeRhUploadImageFormat(uploadImageFormat);
-    const soundOptions = Array.isArray(soundFileOptions) && soundFileOptions.length ? soundFileOptions : [DEFAULT_SUCCESS_SOUND, DEFAULT_FAIL_SOUND];
-
-    const refreshFolderName = useCallback(async () => {
-        const token = getEffectiveResultFolderToken(workbenchId);
-        setHasOverride(hasWorkbenchFolderOverride(workbenchId));
-        if (!token) {
-            setFolderName("默认 image_cache");
-            return;
-        }
-        try {
-            const folder = await uxpFs.getEntryForPersistentToken(token);
-            setFolderName(folder?.name || "已选择回图文件夹");
-        } catch (_) {
-            setFolderName("目录失效，请重新选择");
-        }
-    }, [workbenchId]);
-
-    useEffect(() => {
-        refreshFolderName();
-        const h = () => refreshFolderName();
-        window.addEventListener(RESULT_FOLDER_STORAGE_CHANGED, h);
-        return () => window.removeEventListener(RESULT_FOLDER_STORAGE_CHANGED, h);
-    }, [refreshFolderName]);
-
-    useEffect(() => {
-        writeLocal("xlrh_place_edge_feather_enabled", String(placeEdgeFeatherEnabled));
-    }, [placeEdgeFeatherEnabled]);
-    useEffect(() => {
-        writeLocal("xlrh_place_keep_selection", String(placeKeepSelection));
-    }, [placeKeepSelection]);
-    useEffect(() => {
-        const handler = (e) => {
-            if (e?.detail && typeof e.detail.enabled === "boolean") {
-                setPlaceEdgeFeatherEnabled(e.detail.enabled);
-            } else {
-                setPlaceEdgeFeatherEnabled(readPlaceEdgeFeatherEnabledFromStorage());
-            }
-            if (e?.detail && typeof e.detail.keepSelection === "boolean") {
-                setPlaceKeepSelection(e.detail.keepSelection);
-            } else {
-                setPlaceKeepSelection(readPlaceKeepSelectionFromStorage());
-            }
-        };
-        window.addEventListener(PLACE_EDGE_FEATHER_CHANGED, handler);
-        return () => window.removeEventListener(PLACE_EDGE_FEATHER_CHANGED, handler);
-    }, []);
-
-    const handleChooseFolder = useCallback(async () => {
-        try {
-            const folder = await uxpFs.getFolder();
-            if (!folder) return;
-            const token = await uxpFs.createPersistentToken(folder);
-            setOverrideResultFolderToken(workbenchId, token);
-            setFolderName(folder.name || "已选择回图文件夹");
-            setHasOverride(true);
-            pushStatus(`${productLabel} 回图文件夹已设置：${folder.name || "已选择文件夹"}`, 3000);
-        } catch (error) {
-            pushStatus(`选择回图文件夹失败：${error?.message || error}`, 5000);
-        }
-    }, [productLabel, pushStatus, workbenchId]);
-
-    const handleDefaultFolder = useCallback(() => {
-        clearOverrideResultFolderToken(workbenchId);
-        setHasOverride(false);
-        refreshFolderName();
-        pushStatus(`${productLabel} 已切换为默认回图缓存`, 3000);
-    }, [productLabel, pushStatus, refreshFolderName, workbenchId]);
-
-    const handleOpenCache = useCallback(async () => {
-        try {
-            if (isInWebView()) {
-                await bridgeStorage.localFileSystem.openResultImageCacheFolder();
-                pushStatus("已请求打开回图缓存", 3000);
-                return;
-            }
-            const folder = await getTempResultFolder();
-            if (!folder?.nativePath) throw new Error("无法获取缓存路径");
-            await uxpShell.openPath(folder.nativePath);
-            pushStatus("已请求打开回图缓存", 3000);
-        } catch (error) {
-            pushStatus(`打开回图缓存失败：${error?.message || error}`, 5000);
-        }
-    }, [pushStatus]);
-
-    const handleClearCacheConfirm = useCallback(async () => {
-        if (clearing) return;
-        if (clearStep < 3) {
-            setClearStep((n) => Math.min(3, n + 1));
-            return;
-        }
-        setClearing(true);
-        try {
-            const res = isInWebView() ? await bridgeStorage.localFileSystem.clearResultImageCache() : await clearResultImageCache();
-            setClearStep(0);
-            pushStatus(`回图缓存已删除：${res?.files || 0} 个文件 / ${formatCacheBytes(res?.bytes || 0)}`, 6000);
-        } catch (error) {
-            pushStatus(`清理回图缓存失败：${error?.message || error}`, 6000);
-        } finally {
-            setClearing(false);
-        }
-    }, [clearStep, clearing, pushStatus]);
-
-    const handleCustomBgImageSelect = useCallback(() => {
-        const input = document.createElement("input");
-        input.type = "file";
-        input.accept = "image/*";
-        input.onchange = (e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                setCustomBgImage(event.target.result);
-                setCustomBgEnabled(true);
-            };
-            reader.readAsDataURL(file);
-        };
-        input.click();
-    }, [setCustomBgEnabled, setCustomBgImage]);
 
     return (
         <div className="rh-settings-wrap settings-container comfy-settings-wrap">
-            <SettingsCard cardClass="rh-interaction-card" icon="⚡" title="交互" defaultOpen>
-                <div className="rh-interaction-content"><div className="rh-interaction-section">
-                    <div className="rh-interaction-section-title">回图贴入</div>
-                    <div className="rh-interaction-row">
-                        <label className="rh-interaction-label"><span>自动回传</span><span className="rh-interaction-desc">{rhAutoReturnEnabled !== false && rhAutoReturnEnabled !== "false" ? "任务完成后自动贴回 PS" : "关闭后停在任务队列等待手动贴回"}</span></label>
-                        <label className="rh-toggle"><input type="checkbox" checked={rhAutoReturnEnabled !== false && rhAutoReturnEnabled !== "false"} onChange={(e) => setRhAutoReturnEnabled(e.target.checked)} /><span className="rh-toggle-slider" /></label>
-                    </div>
-                    <div className="rh-interaction-row rh-upload-setting-row"><div className="rh-upload-setting-block">
-                        <div className="rh-upload-setting-head"><label className="rh-interaction-label"><span>上传长边</span><span className="rh-interaction-desc">截图上传前按长边压到指定尺寸</span></label><span className="rh-upload-setting-value">{formatUploadLongEdgeLabel(normalizedUploadLongEdgeMax)}</span></div>
-                        <input className="rh-upload-setting-slider" type="range" min="0" max={RH_IMAGE_LONG_EDGE_OPTIONS.length - 1} step="1" value={uploadLongEdgeIndex} onChange={(e) => setUploadLongEdgeMax(RH_IMAGE_LONG_EDGE_OPTIONS[Math.max(0, Math.min(RH_IMAGE_LONG_EDGE_OPTIONS.length - 1, Number(e.target.value) || 0))])} />
-                        <div className="rh-longedge-marks">{RH_IMAGE_LONG_EDGE_OPTIONS.map((n) => <span key={n} className={`rh-longedge-mark ${n === normalizedUploadLongEdgeMax ? "active" : ""}`}>{formatUploadLongEdgeLabel(n)}</span>)}</div>
-                    </div></div>
-                    <div className="rh-interaction-row rh-upload-format-row">
-                        <label className="rh-interaction-label"><span>上传图片格式</span><span className="rh-interaction-desc">当前 {uploadImageFormatValue === "png" ? "PNG" : "JPG"}</span></label>
-                        <div className="rh-interaction-tone-switch rh-upload-format-switch">{RH_UPLOAD_IMAGE_FORMAT_OPTIONS.map((item) => <button key={item.value} type="button" className={`rh-interaction-tone-btn ${uploadImageFormatValue === item.value ? "active" : ""}`} onClick={() => setUploadImageFormat(item.value)}>{item.label}</button>)}</div>
-                    </div>
-                    <div className="rh-interaction-row rh-sound-row">
-                        <label className="rh-interaction-label"><span>回图成功音效</span><span className="rh-interaction-desc">{successSoundFile}</span></label>
-                        <select className="rh-sound-select" value={successSoundFile} onFocus={onRefreshSoundFiles} onChange={(e) => setSuccessSoundFile(e.target.value)}>
-                            {soundOptions.map((name) => <option key={`ok-${name}`} value={name}>{name}</option>)}
-                        </select>
-                    </div>
-                    <div className="rh-interaction-row rh-sound-row">
-                        <label className="rh-interaction-label"><span>回图失败音效</span><span className="rh-interaction-desc">{failSoundFile}</span></label>
-                        <select className="rh-sound-select" value={failSoundFile} onFocus={onRefreshSoundFiles} onChange={(e) => setFailSoundFile(e.target.value)}>
-                            {soundOptions.map((name) => <option key={`fail-${name}`} value={name}>{name}</option>)}
-                        </select>
-                    </div>
-                    <div className="rh-interaction-row rh-result-folder-row">
-                        <label className="rh-interaction-label"><span>语音文件夹</span><span className="rh-interaction-desc">插件安装目录 / voices</span></label>
-                        <div className="rh-folder-actions"><button type="button" className="rh-folder-btn rh-folder-btn-muted rh-folder-btn-open" onClick={onOpenSoundFolder}>打开</button></div>
-                    </div>
-                    <div className="rh-interaction-row rh-result-folder-row">
-                        <label className="rh-interaction-label"><span>回图文件夹</span><span className="rh-interaction-desc">{hasOverride ? folderName : "默认 PluginData / image_cache"}</span></label>
-                        <div className="rh-folder-actions"><button type="button" className="rh-folder-btn" onClick={handleChooseFolder}>选择</button><button type="button" className="rh-folder-btn rh-folder-btn-muted" onClick={handleDefaultFolder}>默认</button></div>
-                    </div>
-                    <div className="rh-interaction-row rh-result-folder-row">
-                        <label className="rh-interaction-label"><span>回图缓存</span><span className="rh-interaction-desc">默认 image_cache，可打开查看或清空</span></label>
-                        <div className="rh-folder-actions"><button type="button" className="rh-folder-btn rh-folder-btn-muted" onClick={handleOpenCache}>打开</button><button type="button" className="rh-folder-btn rh-folder-btn-danger" onClick={() => setClearStep(1)} disabled={clearing}>{clearing ? "清理中" : "清空"}</button></div>
-                    </div>
-                    <div className="rh-interaction-row">
-                        <label className="rh-interaction-label"><span>边缘软边</span><span className="rh-interaction-desc">贴入返图时自动添加渐变蒙版</span></label>
-                        <label className="rh-toggle"><input type="checkbox" checked={placeEdgeFeatherEnabled} onChange={(e) => { setPlaceEdgeFeatherEnabled(e.target.checked); notifyPlaceEdgeFeatherChanged({ enabled: e.target.checked }); }} /><span className="rh-toggle-slider" /></label>
-                    </div>
-                    <div className="rh-interaction-row">
-                        <label className="rh-interaction-label"><span>保留选区</span><span className="rh-interaction-desc">贴入完成后恢复矩形选区</span></label>
-                        <label className="rh-toggle"><input type="checkbox" checked={placeKeepSelection} onChange={(e) => { setPlaceKeepSelection(e.target.checked); notifyPlaceEdgeFeatherChanged({ keepSelection: e.target.checked }); }} /><span className="rh-toggle-slider" /></label>
-                    </div>
-                </div></div>
-            </SettingsCard>
-
-            <SettingsCard cardClass="rh-personalization-card" icon="🎨" title="个性化" defaultOpen>
-                <div className="rh-personalization-content">
-                    <div className="rh-personalization-section"><div className="rh-personalization-section-title">自定义背景</div>
-                        <div className="rh-personalization-bg-toggle"><label className="rh-toggle"><input type="checkbox" checked={customBgEnabled} onChange={(e) => setCustomBgEnabled(e.target.checked)} /><span className="rh-toggle-slider" /></label><span className="rh-personalization-bg-label">启用自定义背景</span></div>
-                        {customBgEnabled && <div className="rh-personalization-bg-preview-wrapper">{customBgImage ? <div className="rh-personalization-bg-preview"><img src={customBgImage} alt="背景预览" /><button className="rh-personalization-bg-clear" onClick={() => { setCustomBgImage(""); setCustomBgEnabled(false); }}>×</button></div> : <button className="rh-personalization-bg-select" onClick={handleCustomBgImageSelect}><span>选择图片</span></button>}</div>}
-                        {customBgEnabled && customBgImage && <><div className="rh-personalization-slider-item"><label>背景透明度: {Math.round(customBgOpacity * 100)}%</label><input type="range" min="0.05" max="1" step="0.05" value={customBgOpacity} onChange={(e) => setCustomBgOpacity(parseFloat(e.target.value))} className="xlrh-slider" /></div><div className="rh-personalization-slider-item"><label>背景模糊: {customBgBlur}px</label><input type="range" min="0" max="20" step="1" value={customBgBlur} onChange={(e) => setCustomBgBlur(parseInt(e.target.value, 10))} className="xlrh-slider" /></div></>}
-                    </div>
-                    <div className="rh-personalization-section"><div className="rh-personalization-section-title">主渐变</div><div className="rh-personalization-color-row"><div className="rh-personalization-color-item"><label>起始颜色</label><input type="color" value={themeColorStart} onChange={(e) => setThemeColorStart(e.target.value)} className="rh-color-picker" /></div><div className="rh-personalization-color-item"><label>结束颜色</label><input type="color" value={themeColorEnd} onChange={(e) => setThemeColorEnd(e.target.value)} className="rh-color-picker" /></div></div></div>
-                    <div className="rh-personalization-section"><div className="rh-personalization-section-title">字体颜色</div><input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} className="rh-color-picker" /></div>
-                    <div className="rh-personalization-section"><div className="rh-personalization-section-title">玻璃效果</div><div className="rh-personalization-slider-item"><label>透明度: {Math.round(opacity * 100)}%</label><input type="range" min="0" max="1" step="0.05" value={opacity} onChange={(e) => setOpacity(parseFloat(e.target.value))} className="xlrh-slider" /></div><div className="rh-personalization-slider-item"><label>模糊程度: {blur}px</label><input type="range" min="0" max="30" step="1" value={blur} onChange={(e) => setBlur(parseInt(e.target.value, 10))} className="xlrh-slider" /></div></div>
-                </div>
-            </SettingsCard>
-
-            {clearStep > 0 && (
-                <div className="xl-popup-overlay" onClick={() => !clearing && setClearStep(0)}>
-                    <div className="xl-popup-dialog xl-popup-dialog-danger" onClick={(e) => e.stopPropagation()}>
-                        <div className="xl-popup-icon">!</div><div className="xl-popup-title">确认清空回图缓存 {clearStep}/3</div><div className="xl-popup-body"><div className="xl-danger-note">第三次确认后才会执行。</div></div>
-                        <div className="xl-popup-actions"><button className="xl-btn xl-btn-secondary" onClick={() => setClearStep(0)} disabled={clearing}>取消</button><button className={`xl-btn xl-btn-danger ${clearing ? "is-loading" : ""}`} onClick={handleClearCacheConfirm} disabled={clearing}>{clearStep >= 3 ? "第三次确认并清理" : "继续确认"}</button></div>
-                    </div>
-                </div>
-            )}
+            <SharedInteractionSettingsCard
+                pushStatus={pushStatus}
+                workbenchId={workbenchId}
+                rhAutoReturnEnabled={rhAutoReturnEnabled}
+                setRhAutoReturnEnabled={setRhAutoReturnEnabled}
+                concurrentReturnGroupEnabled={concurrentReturnGroupEnabled}
+                setConcurrentReturnGroupEnabled={setConcurrentReturnGroupEnabled}
+                uploadLongEdgeMax={uploadLongEdgeMax}
+                setUploadLongEdgeMax={setUploadLongEdgeMax}
+                uploadImageFormat={uploadImageFormat}
+                setUploadImageFormat={setUploadImageFormat}
+                soundMuted={soundMuted}
+                setSoundMuted={setSoundMuted}
+                soundFileOptions={soundFileOptions}
+                successSoundFile={successSoundFile}
+                setSuccessSoundFile={setSuccessSoundFile}
+                failSoundFile={failSoundFile}
+                setFailSoundFile={setFailSoundFile}
+                onOpenSoundFolder={onOpenSoundFolder}
+                onRefreshSoundFiles={onRefreshSoundFiles}
+            />
+            <SharedPersonalizationSettingsCard
+                themeMode={themeMode}
+                setThemeMode={setThemeMode}
+                themeColorStart={themeColorStart}
+                setThemeColorStart={setThemeColorStart}
+                themeColorEnd={themeColorEnd}
+                setThemeColorEnd={setThemeColorEnd}
+                opacity={opacity}
+                setOpacity={setOpacity}
+                blur={blur}
+                setBlur={setBlur}
+                customBgEnabled={customBgEnabled}
+                setCustomBgEnabled={setCustomBgEnabled}
+                customBgImage={customBgImage}
+                setCustomBgImage={setCustomBgImage}
+                customBgOpacity={customBgOpacity}
+                setCustomBgOpacity={setCustomBgOpacity}
+                customBgBlur={customBgBlur}
+                setCustomBgBlur={setCustomBgBlur}
+                textColor={textColor}
+                setTextColor={setTextColor}
+            />
         </div>
     );
-}
-
-function writeLocal(key, value) {
-    try {
-        localStorage.setItem(key, value);
-    } catch (_) {}
 }
 
 export function ComfyShell({
@@ -1089,7 +923,7 @@ export function ComfyShell({
     const { pushStatus } = sharedSettings;
     const { confirmCaptureSelection, warningDialog: squareSelectionWarningDialog } = useSquareSelectionWarning(pushStatus);
     const [currentPage, setCurrentPage] = useState("home");
-    const [comfyBaseUrl, setComfyBaseUrl] = usePersistedState("comfy_base_url", "http://127.0.0.1:8188");
+    const [comfyBaseUrl, setComfyBaseUrl] = usePersistedState("comfy_base_url", "");
     const [comfyConnected, setComfyConnected] = useState(false);
     const [connecting, setConnecting] = useState(false);
     const [connectError, setConnectError] = useState("");
@@ -1123,6 +957,15 @@ export function ComfyShell({
     const hasRunningRuns = useMemo(() => runs.some((run) => run.status === "running"), [runs]);
     const taskRunsForQueue = Array.isArray(sharedTaskRuns) ? sharedTaskRuns : runs;
 
+    useEffect(() => {
+        try {
+            const url = new URL(String(comfyBaseUrl || "").trim());
+            if (url.hostname === ["127", "0", "0", "1"].join(".") && url.port === "8188") setComfyBaseUrl("");
+        } catch {
+            // Ignore non-URL input while the user is typing.
+        }
+    }, [comfyBaseUrl, setComfyBaseUrl]);
+
     const updateRun = useCallback((runId, patch) => {
         setRuns((prev) => prev.map((run) => (run.id === runId ? { ...run, ...patch } : run)));
     }, []);
@@ -1138,6 +981,13 @@ export function ComfyShell({
         }, 150);
         return () => clearInterval(timer);
     }, [hasRunningRuns]);
+
+    useEffect(() => {
+        const prune = () => setRuns((prev) => pruneCompletedRhRuns(prev));
+        prune();
+        const timer = setInterval(prune, 1000);
+        return () => clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         if (typeof onRunsChange === "function") onRunsChange(runs);
@@ -1247,7 +1097,7 @@ export function ComfyShell({
             const res = await testComfyConnection(comfyBaseUrl);
             setComfyBaseUrl(res.baseUrl);
             setComfyConnected(true);
-            pushStatus(`Comfy UI 已连接：${res.baseUrl}`, 3000);
+            pushStatus("Comfy UI 已连接", 3000);
             await refreshCloudData(res.baseUrl);
         } catch (error) {
             const msg = error?.message || String(error);
@@ -1306,6 +1156,7 @@ export function ComfyShell({
     }, [buildWorkflowDetail, fieldValues, paramRows, setFieldValues, workflowDetail]);
 
     const saveCapture = useCallback((key, capture, prefix, placeContext = null) => {
+        if (!workflowUploadId || (selectedWorkflowId && workflowDetail?.id !== selectedWorkflowId)) return false;
         const currentUploads = filterComfyUploadsForWorkflow(pendingUploadsRef.current, workflowUploadId);
         const record = scopedComfyUpload(
             uploadRecordFromCapture(capture, currentUploads[key], prefix, placeContext),
@@ -1322,7 +1173,7 @@ export function ComfyShell({
             return next;
         });
         return true;
-    }, [setPendingUploads, workflowDetail?.name, workflowUploadId]);
+    }, [selectedWorkflowId, setPendingUploads, workflowDetail?.id, workflowDetail?.name, workflowUploadId]);
 
     const clearImageByKey = useCallback((key) => {
         const storageKey = comfyUploadStorageKey(workflowUploadId, key);
@@ -1359,9 +1210,9 @@ export function ComfyShell({
         clearImageByKey(key);
     }, [clearImageByKey]);
 
-    const enqueueAutoPlace = useCallback((savedFileNames, groupName, bounds, placeToken, docId) => {
+    const enqueueAutoPlace = useCallback((savedFileNames, groupName, bounds, placeToken, docId, options = {}) => {
         const prev = autoPlaceQueueRef.current.catch(() => {});
-        const next = prev.then(() => performAutoPlace(savedFileNames, groupName, bounds, placeToken, docId, { force: true }));
+        const next = prev.then(() => performAutoPlace(savedFileNames, groupName, bounds, placeToken, docId, { force: true, group: options.group !== false }));
         autoPlaceQueueRef.current = next.catch(() => {});
         return next;
     }, []);
@@ -1373,13 +1224,16 @@ export function ComfyShell({
         if (!comfyConnected || !baseUrl) return pushStatus("请先连接 Comfy UI", 4000);
         if (!workflowDetail?.prompt) return pushStatus("请先选择工作流", 4000);
         if (selectedWorkflowId && workflowDetail.id && workflowDetail.id !== selectedWorkflowId) return pushStatus("工作流正在加载，请稍后再运行", 4000);
+        const runWorkflowId = comfyWorkflowUploadId(workflowDetail, selectedWorkflowId);
+        if (!runWorkflowId) return pushStatus("工作流正在加载，请稍后再运行", 4000);
         const runFieldValues = { ...fieldValues };
         const runObjectInfo = objectInfo;
         const runDetail = workflowDetail?.raw ? buildWorkflowDetail(workflowDetail.raw, workflowDetail, runFieldValues) : workflowDetail;
+        if (String(runDetail?.id || "") !== String(runWorkflowId)) return pushStatus("工作流正在加载，请稍后再运行", 4000);
         const runImageRows = runDetail?.imageRows || imageRows;
         const runParamRows = runDetail?.paramRows || paramRows;
         const runName = runDetail.name || workflowDetail.name || "Comfy UI";
-        const runPendingUploads = filterComfyUploadsForWorkflow(pendingUploadsRef.current, workflowUploadId);
+        const runPendingUploads = filterComfyUploadsForWorkflow(pendingUploadsRef.current, runWorkflowId);
         const missing = firstComfyImageMissing(runImageRows, runPendingUploads);
         if (missing) return pushStatus(missing, 4000);
         submittingRef.current = true;
@@ -1406,8 +1260,17 @@ export function ComfyShell({
             delete runCancelRefs.current[runId];
             return pushStatus(`捕获图冻结失败：${error?.message || error}`, 6000);
         }
-        const initialUploadEstimate = buildComfyUploadEstimate(runImageRows, initialUploads);
-        setRuns((prev) => [...prev, { id: runId, status: "running", progress: 0, stageText: "准备中", startTime, elapsedSec: 0, workflowName: runName, pendingUploads: initialUploads, uploadEstimate: initialUploadEstimate, batchTotal: repeats, batchImageTotal: repeats, batchDone: 0, batchIndex: 0, taskIds: [] }]);
+        const uploadsForRun = initialUploads;
+        try {
+            assertComfyRunUploads(runImageRows, uploadsForRun, runWorkflowId);
+        } catch (error) {
+            releaseSubmitLock();
+            delete runAbortRefs.current[runId];
+            delete runCancelRefs.current[runId];
+            return pushStatus(error?.message || String(error), 6000);
+        }
+        const initialUploadEstimate = buildComfyUploadEstimate(runImageRows, uploadsForRun);
+        setRuns((prev) => [...prev, { id: runId, status: "running", progress: 0, stageText: "准备中", startTime, elapsedSec: 0, workflowName: runName, pendingUploads: uploadsForRun, uploadEstimate: initialUploadEstimate, batchTotal: repeats, batchImageTotal: repeats, batchDone: 0, batchIndex: 0, taskIds: [] }]);
         const queuedPromptIds = [];
         const savedAll = [];
         const pendingPlaceFileNames = [];
@@ -1422,9 +1285,12 @@ export function ComfyShell({
             updateRun(runId, { stageText: "检查 Comfy 连接", progress: 2 });
             await ensureComfyReady(baseUrl);
             throwIfCancelled();
-            const uploadsForRun = initialUploads;
             let placeContext = null;
-            if (!placeContext && runImageRows[0]) placeContext = comfyPlaceContextFromUpload(uploadsForRun[runImageRows[0].key]);
+            if (!placeContext && runImageRows[0]) {
+                const firstRow = runImageRows[0];
+                const firstKey = firstRow.key || comfyRowKey(firstRow.nodeId, firstRow.fieldName);
+                placeContext = comfyPlaceContextFromUpload(uploadsForRun[firstKey]);
+            }
             if (!placeContext) placeContext = await recordComfyPlaceContext();
             throwIfCancelled();
             updateRun(runId, { stageText: "上传图片", progress: 15 });
@@ -1436,23 +1302,23 @@ export function ComfyShell({
                 placeToken = folder?.token ?? null;
             }
             if (!folder || !placeToken) throw new Error("无法访问回图缓存");
-            const autoReturnOn = sharedSettings.rhAutoReturnEnabled !== false && sharedSettings.rhAutoReturnEnabled !== "false";
             const inputSubfolder = `xlrh_${comfySafeRunSuffix(runId)}`;
             const uploadedByKeyForRun = {};
             const uploadDebugByKeyForRun = {};
             for (const row of runImageRows) {
                 throwIfCancelled();
-                const slot = uploadsForRun[row.key];
+                const rowKey = row.key || comfyRowKey(row.nodeId, row.fieldName);
+                const slot = uploadsForRun[rowKey];
                 if (!slot?.base64 && !slot?.uploadSessionId) continue;
-                uploadDebugByKeyForRun[row.key] = { frozen: comfyUploadDebug(slot) };
-                uploadedByKeyForRun[row.key] = await uploadComfyImage(baseUrl, {
+                uploadDebugByKeyForRun[rowKey] = { frozen: comfyUploadDebug(slot) };
+                uploadedByKeyForRun[rowKey] = await uploadComfyImage(baseUrl, {
                     ...slot,
                     subfolder: inputSubfolder,
-                    fileName: comfyRunFileName(slot.fileName, runId, row.key),
+                    fileName: comfyRunFileName(slot.fileName, runId, rowKey),
                 }, {
                     onRetry: ({ nextAttempt, maxAttempts }) => updateRun(runId, { stageText: `上传图片重试 ${nextAttempt}/${maxAttempts}`, progress: 15 }),
                 });
-                uploadDebugByKeyForRun[row.key].uploaded = uploadedByKeyForRun[row.key];
+                uploadDebugByKeyForRun[rowKey].uploaded = uploadedByKeyForRun[rowKey];
             }
             updateRun(runId, { stageText: repeats > 1 ? `并发提交 ${repeats} 个任务` : "提交工作流", progress: 32 });
             const promptItems = await Promise.all(Array.from({ length: repeats }, async (_, batchIndex) => {
@@ -1489,11 +1355,12 @@ export function ComfyShell({
 
             let completedRuns = 0;
             let resultQueue = Promise.resolve();
+            const itemFailures = [];
             const handleComfyResult = async ({ itemIndex, promptId, result, outputSuffix, inputDebug, uploadDebugByKey }) => {
                 throwIfCancelled();
                 completedRuns += 1;
                 const ownedResult = filterComfyResultBySuffix(result, outputSuffix);
-                if (Array.isArray(result?.images) && result.images.length > 0 && ownedResult.urls.length === 0) {
+                if (outputSuffix && ownedResult.urls.length === 0) {
                     throw new Error(`Comfy 回图归属校验失败：任务 ${itemIndex}/${repeats} 没有拿到属于本次提交的图片`);
                 }
                 const resultUrls = ownedResult.urls || [];
@@ -1533,11 +1400,18 @@ export function ComfyShell({
                 savedAll.push(...savedFileNames);
                 if (savedAll.length > batchImageTotal) batchImageTotal = savedAll.length;
                 notifyResultFilesChanged({ folderToken: placeToken });
+                const autoReturnOn = readAutoReturnEnabled();
+                const concurrentGroupOn = readConcurrentReturnGroupEnabled();
                 const pendingForRun = pendingPlaceFileNames.concat(groupedAutoPlaceFileNames, savedFileNames);
-                updateRun(runId, { batchDone: savedAll.length, batchImageTotal, placeSavedFileNames: pendingForRun, placeBounds: placeContext?.bounds ?? null, placeToken, placeDocId: placeContext?.docId ?? null, placeGroupName: `${runName} 生成` });
+                updateRun(runId, { batchDone: savedAll.length, batchImageTotal, placeSavedFileNames: pendingForRun, placeBounds: placeContext?.bounds ?? null, placeToken, placeDocId: placeContext?.docId ?? null, placeGroupName: `${runName} 生成`, placeGroupEnabled: repeats > 1 ? concurrentGroupOn : true });
                 if (!autoReturnOn) {
                     pendingPlaceFileNames.push(...savedFileNames);
                     updateRun(runId, { placeStatus: "pending", placeSavedFileNames: pendingPlaceFileNames.slice() });
+                    return;
+                }
+                if (!canAutoPlaceComfyResult(placeContext)) {
+                    pendingPlaceFileNames.push(...savedFileNames);
+                    updateRun(runId, { placeStatus: "pending", placeError: "未记录到回传位置", placeSavedFileNames: pendingPlaceFileNames.slice() });
                     return;
                 }
                 if (repeats > 1) {
@@ -1560,30 +1434,41 @@ export function ComfyShell({
                 }
             };
             const enqueueComfyResult = (payload) => {
-                resultQueue = resultQueue.then(() => handleComfyResult(payload));
-                return resultQueue;
+                const next = resultQueue.catch(() => undefined).then(() => handleComfyResult(payload));
+                resultQueue = next.catch(() => undefined);
+                return next;
             };
             await Promise.all(submittedList.map(async ({ itemIndex, promptId, clientId, prompt: queuedPrompt, outputSuffix, outputNodeIds, inputDebug, uploadDebugByKey }) => {
                 let reportedComfyProgress = false;
-                const result = await waitForComfyImages(baseUrl, promptId, {
-                    clientId,
-                    prompt: queuedPrompt,
-                    outputSuffix,
-                    outputNodeIds,
-                    onProgress: () => {
-                        if (reportedComfyProgress) return;
-                        reportedComfyProgress = true;
-                        updateRun(runId, { stageText: repeats > 1 ? `云端执行中 ${completedRuns}/${repeats}` : "执行中", progress: Math.min(88, 55 + Math.round(completedRuns * 24 / repeats)) });
-                    },
-                    pollMs: 1500,
-                    signal: abortController?.signal,
-                });
-                await enqueueComfyResult({ itemIndex, promptId, result, outputSuffix, inputDebug, uploadDebugByKey });
+                try {
+                    const result = await waitForComfyImages(baseUrl, promptId, {
+                        clientId,
+                        prompt: queuedPrompt,
+                        outputSuffix,
+                        outputNodeIds,
+                        onProgress: () => {
+                            if (reportedComfyProgress) return;
+                            reportedComfyProgress = true;
+                            updateRun(runId, { stageText: repeats > 1 ? `云端执行中 ${completedRuns}/${repeats}` : "执行中", progress: Math.min(88, 55 + Math.round(completedRuns * 24 / repeats)) });
+                        },
+                        pollMs: 1500,
+                        signal: abortController?.signal,
+                    });
+                    await enqueueComfyResult({ itemIndex, promptId, result, outputSuffix, inputDebug, uploadDebugByKey });
+                } catch (error) {
+                    if (abortController?.signal?.aborted || runCancelRefs.current[runId] === true) throw error;
+                    itemFailures.push({ itemIndex, promptId, message: error?.message || String(error) });
+                }
             }));
-            if (autoReturnOn && repeats > 1 && groupedAutoPlaceFileNames.length > 0) {
+            if (savedAll.length === 0 && itemFailures.length > 0) {
+                throw new Error(itemFailures[0]?.message || "Comfy 批量任务全部失败");
+            }
+            const finalAutoReturnOn = readAutoReturnEnabled();
+            const finalConcurrentGroupOn = readConcurrentReturnGroupEnabled();
+            if (finalAutoReturnOn && repeats > 1 && groupedAutoPlaceFileNames.length > 0 && canAutoPlaceComfyResult(placeContext)) {
                 updateRun(runId, { stageText: "回传到 PS", progress: 95, placeSavedFileNames: pendingPlaceFileNames.concat(groupedAutoPlaceFileNames) });
                 try {
-                    await enqueueAutoPlace(groupedAutoPlaceFileNames.slice(), `${runName} 生成`, placeContext?.bounds ?? null, placeToken, placeContext?.docId ?? null);
+                    await enqueueAutoPlace(groupedAutoPlaceFileNames.slice(), `${runName} 生成`, placeContext?.bounds ?? null, placeToken, placeContext?.docId ?? null, { group: finalConcurrentGroupOn });
                     groupedAutoPlaceFileNames.length = 0;
                     updateRun(runId, { placeStatus: pendingPlaceFileNames.length > 0 ? "pending" : "placed", placeSavedFileNames: pendingPlaceFileNames.slice() });
                 } catch (error) {
@@ -1598,12 +1483,19 @@ export function ComfyShell({
                     }
                 }
             }
+            if (groupedAutoPlaceFileNames.length > 0) {
+                pendingPlaceFileNames.push(...groupedAutoPlaceFileNames);
+                groupedAutoPlaceFileNames.length = 0;
+                updateRun(runId, { placeStatus: "pending", placeError: finalAutoReturnOn ? "未记录到回传位置" : "", placeSavedFileNames: pendingPlaceFileNames.slice() });
+            }
             const placePatch = pendingPlaceFileNames.length > 0
-                ? { placeStatus: "pending", placeSavedFileNames: pendingPlaceFileNames.slice(), placeBounds: placeContext?.bounds ?? null, placeToken, placeDocId: placeContext?.docId ?? null, placeGroupName: `${runName} 生成` }
-                : { placeStatus: autoReturnOn ? (hadPlaceFailure ? "failed" : "placed") : "pending" };
+                ? { placeStatus: "pending", placeSavedFileNames: pendingPlaceFileNames.slice(), placeBounds: placeContext?.bounds ?? null, placeToken, placeDocId: placeContext?.docId ?? null, placeGroupName: `${runName} 生成`, placeGroupEnabled: repeats > 1 ? finalConcurrentGroupOn : true }
+                : { placeStatus: finalAutoReturnOn ? (hadPlaceFailure ? "failed" : "placed") : "pending" };
             updateRun(runId, { status: "success", progress: 100, stageText: "已完成", completedAt: Date.now(), batchDone: savedAll.length, batchImageTotal, ...placePatch });
-            pushStatus(autoReturnOn ? `Comfy 已完成并保存 ${savedAll.length} 张` : "Comfy 已完成，自动回传已关闭", 6000);
-            playSound({ fileName: sharedSettings.successSoundFile });
+            pushStatus(finalAutoReturnOn
+                ? `Comfy 已完成并保存 ${savedAll.length} 张${itemFailures.length > 0 ? `，${itemFailures.length} 个任务失败` : ""}`
+                : `Comfy 已完成，自动回传已关闭${itemFailures.length > 0 ? `，${itemFailures.length} 个任务失败` : ""}`, 6000);
+            playSound({ fileName: readSuccessSoundFile(sharedSettings.successSoundFile) });
         } catch (error) {
             const msg = error?.message || String(error);
             const cancelled = runCancelRefs.current[runId] === true;
@@ -1614,7 +1506,7 @@ export function ComfyShell({
             updateRun(runId, { status: cancelled ? "cancelled" : "error", progress: 100, stageText: msg, completedAt: Date.now() });
             if (cancelled) pushStatus("Comfy 任务已取消", 3000);
             else {
-                playSoundFail({ fileName: sharedSettings.failSoundFile });
+                playSoundFail({ fileName: readFailSoundFile(sharedSettings.failSoundFile) });
                 pushStatus(`Comfy 运行失败：${msg}`, 7000);
             }
         } finally {
@@ -1622,7 +1514,7 @@ export function ComfyShell({
             delete runCancelRefs.current[runId];
             releaseSubmitLock();
         }
-    }, [buildWorkflowDetail, comfyBaseUrl, comfyConnected, workflowDetail, imageRows, workflowUploadId, pushStatus, updateRun, sharedSettings.rhAutoReturnEnabled, sharedSettings.successSoundFile, sharedSettings.failSoundFile, paramRows, fieldValues, objectInfo, enqueueAutoPlace]);
+    }, [buildWorkflowDetail, comfyBaseUrl, comfyConnected, selectedWorkflowId, workflowDetail, imageRows, workflowUploadId, pushStatus, updateRun, sharedSettings.successSoundFile, sharedSettings.failSoundFile, paramRows, fieldValues, objectInfo, enqueueAutoPlace]);
 
     const dismissRun = useCallback((id) => {
         const runItem = runs.find((run) => run.id === id);
@@ -1641,7 +1533,7 @@ export function ComfyShell({
         if (!runItem?.placeSavedFileNames || !runItem.placeToken) return;
         try {
             pushStatus("正在重试贴回图片...", 3000);
-            await enqueueAutoPlace(runItem.placeSavedFileNames, runItem.placeGroupName || "Comfy UI 生成", runItem.placeBounds, runItem.placeToken, runItem.placeDocId);
+            await enqueueAutoPlace(runItem.placeSavedFileNames, runItem.placeGroupName || "Comfy UI 生成", runItem.placeBounds, runItem.placeToken, runItem.placeDocId, { group: runItem.placeGroupEnabled !== false });
             updateRun(id, { placeStatus: "placed", placeError: null });
             pushStatus("贴回成功", 3000);
         } catch (error) {
@@ -1676,7 +1568,7 @@ export function ComfyShell({
     return (
         <>
             {squareSelectionWarningDialog}
-            <ComfyTopBar activeProduct={activeProduct} onChangeProduct={onChangeProduct} isSettingsOpen={!isHome} onToggleView={() => setCurrentPage((p) => p === "home" ? "settings" : "home")} onRefresh={refreshCloudDataAndDefaults} />
+            <ComfyTopBar isSettingsOpen={!isHome} onToggleView={() => setCurrentPage((p) => p === "home" ? "settings" : "home")} onRefresh={refreshCloudDataAndDefaults} />
             <div style={{ flex: 1, minHeight: 0, overflow: "visible", display: isHome ? "flex" : "none", flexDirection: "column", background: "transparent" }}>
                 <ComfyHome state={state} actions={actions} />
             </div>

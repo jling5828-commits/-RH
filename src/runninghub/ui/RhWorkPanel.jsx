@@ -36,9 +36,11 @@ import { scaleDataUrlToMaxSize } from "../../utils/imageEncoder.js";
 import { isInWebView, photoshop } from "../../bridge/uxpBridge.js";
 import { isXiaoLiangRhHostCaptureEnabled } from "../../config/xiaoliangRhHostCapture.js";
 import { performAutoPlace } from "../../utils/autoPlace.js";
+import { readAutoReturnEnabled } from "../../utils/sharedInteractionSettings.js";
 import { Results } from "../../features/results/index.js";
 import { Operation } from "../../features/operation/index.js";
 import { CollapsibleCard } from "../../components/WorkPanel/CollapsibleCard.jsx";
+import { TaskPreviewThumb } from "../../components/shared/TaskPreviewLightbox.jsx";
 import { saveImageWithBounds, getTempResultFolder } from "../../utils/imageSaver.js";
 import {
     getEffectiveResultFolderToken,
@@ -65,7 +67,7 @@ import { EditableSliderValue } from "../../components/EditableSliderValue.jsx";
 import "../../components/OptionalParams.css";
 import "../../components/PromptSection.css";
 import "./RhWorkPanel.css";
-import { useDropdownPosition, formatRhAppDisplayLabel, RH_APP_MENU_MAX_HEIGHT_PX } from "./runninghubDropdownUtils.js";
+import { RH_CLOSE_APP_DROPDOWNS_EVENT, RH_DROPDOWN_OUTSIDE_EVENTS, useDropdownPosition, formatRhAppDisplayLabel, RH_APP_MENU_MAX_HEIGHT_PX } from "./runninghubDropdownUtils.js";
 import {
     RhParamNumericStepper,
     parseNumericStepFromFieldData,
@@ -596,36 +598,55 @@ function RhTextParamRow({ model, fieldValues, setField }) {
  * 工作台顶栏：调用参数 CustomSelect（标签 | 值 + 下拉）
  * @param {{ disabled?: boolean }} props.disabled — 无 API Key 时暗淡且不可展开
  */
-function RhWorkbenchAppSelect({ savedApps, webappId, setWebappId, onOpenSettings, onRemoveSavedApp, disabled = false }) {
+function RhWorkbenchAppSelect({ savedApps, webappId, setWebappId, onOpenSettings, onRemoveSavedApp, disabled = false, active = true }) {
     const [isOpen, setIsOpen] = useState(false);
     const [isClosing, setIsClosing] = useState(false);
     const containerRef = useRef(null);
-    const isVisible = !disabled && (isOpen || isClosing);
+    const closeTimerRef = useRef(0);
+    const isVisible = active && !disabled && (isOpen || isClosing);
     const dropdownStyle = useDropdownPosition(containerRef, isVisible, false, RH_APP_MENU_MAX_HEIGHT_PX);
-    const dropdownTileSize = dropdownStyle
-        ? Math.max(
-              118,
-              Math.min(
-                  220,
-                  Math.floor(
-                      (typeof window !== "undefined" && (window.innerWidth || 0) <= 380)
-                          ? Number(dropdownStyle.width || 0) - 16
-                          : (Number(dropdownStyle.width || 0) - 24) / 2
-                  )
-              )
-          )
-        : null;
+    const dropdownWidth = Number(dropdownStyle?.width || 0);
+    const dropdownColumns = dropdownWidth > 0
+        ? Math.max(2, Math.min(5, Math.floor((dropdownWidth - 8) / 126)))
+        : 2;
+    const dropdownTileSize = dropdownWidth > 0
+        ? Math.max(96, Math.floor((dropdownWidth - 16 - 8 * (dropdownColumns - 1)) / dropdownColumns))
+        : 140;
     const dropdownMenuStyle = dropdownStyle
-        ? { ...dropdownStyle, "--rh-work-app-tile-size": `${dropdownTileSize}px` }
+        ? {
+            ...dropdownStyle,
+            "--rh-work-app-column-count": dropdownColumns,
+            "--rh-work-app-tile-size": `${dropdownTileSize}px`,
+        }
         : {};
     const validSavedApps = Array.isArray(savedApps) ? savedApps : [];
 
+    const finishClose = useCallback(() => {
+        window.clearTimeout(closeTimerRef.current);
+        setIsOpen(false);
+        setIsClosing(false);
+    }, []);
+
+    const closeDropdown = useCallback(() => {
+        if (!isOpen && !isClosing) return;
+        setIsClosing(true);
+        window.clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = window.setTimeout(finishClose, 180);
+    }, [finishClose, isClosing, isOpen]);
+
+    useEffect(() => () => window.clearTimeout(closeTimerRef.current), []);
+
     useEffect(() => {
-        if (disabled) {
-            setIsOpen(false);
-            setIsClosing(false);
+        if (disabled || !active) {
+            finishClose();
         }
-    }, [disabled]);
+    }, [active, disabled, finishClose]);
+
+    useEffect(() => {
+        const h = () => finishClose();
+        window.addEventListener(RH_CLOSE_APP_DROPDOWNS_EVENT, h);
+        return () => window.removeEventListener(RH_CLOSE_APP_DROPDOWNS_EVENT, h);
+    }, [finishClose]);
 
     const options = useMemo(() => {
         const out = [];
@@ -651,28 +672,37 @@ function RhWorkbenchAppSelect({ savedApps, webappId, setWebappId, onOpenSettings
     );
 
     useEffect(() => {
+        if (!isVisible) return undefined;
         const h = (e) => {
             if (containerRef.current?.contains(e.target)) return;
             const dd = document.querySelector(".rh-work-app-select-portal");
             if (dd?.contains(e.target)) return;
-            if (isOpen) setIsClosing(true);
+            closeDropdown();
         };
-        document.addEventListener("mousedown", h);
-        return () => document.removeEventListener("mousedown", h);
-    }, [isOpen]);
+        const key = (e) => {
+            if (e.key === "Escape") closeDropdown();
+        };
+        RH_DROPDOWN_OUTSIDE_EVENTS.forEach((type) => document.addEventListener(type, h, true));
+        document.addEventListener("keydown", key, true);
+        window.addEventListener("blur", closeDropdown);
+        return () => {
+            RH_DROPDOWN_OUTSIDE_EVENTS.forEach((type) => document.removeEventListener(type, h, true));
+            document.removeEventListener("keydown", key, true);
+            window.removeEventListener("blur", closeDropdown);
+        };
+    }, [closeDropdown, isVisible]);
 
     const handleAnimationEnd = useCallback((e) => {
         if (e.target === e.currentTarget && e.animationName?.includes("out")) {
-            setIsOpen(false);
-            setIsClosing(false);
+            finishClose();
         }
-    }, []);
+    }, [finishClose]);
 
     const openOrToggle = useCallback(() => {
         if (disabled) return;
-        if (isOpen) setIsClosing(true);
+        if (isOpen || isClosing) closeDropdown();
         else setIsOpen(true);
-    }, [disabled, isOpen]);
+    }, [closeDropdown, disabled, isClosing, isOpen]);
 
     const webappIdTrim = (webappId || "").trim();
     const selected = options.find((o) => String(o.id) === String(webappIdTrim));
@@ -681,12 +711,13 @@ function RhWorkbenchAppSelect({ savedApps, webappId, setWebappId, onOpenSettings
     const pick = useCallback(
         (id) => {
             if (id === ADD_NEW_APP_VALUE) {
+                closeDropdown();
                 onOpenSettings?.();
                 return;
             }
             setWebappId(String(id));
         },
-        [onOpenSettings, setWebappId]
+        [closeDropdown, onOpenSettings, setWebappId]
     );
 
     const dropdownContent = (
@@ -709,7 +740,7 @@ function RhWorkbenchAppSelect({ savedApps, webappId, setWebappId, onOpenSettings
                                 onClick={(e) => {
                                     if (e.target.closest(".rh-work-app-item-delete")) return;
                                     pick(opt.id);
-                                    setIsClosing(true);
+                                    closeDropdown();
                                 }}
                             >
                                 <span className="rh-work-app-add-icon">+</span>
@@ -728,7 +759,7 @@ function RhWorkbenchAppSelect({ savedApps, webappId, setWebappId, onOpenSettings
                             onClick={(e) => {
                                 if (e.target.closest(".rh-work-app-item-delete")) return;
                                 pick(opt.id);
-                                setIsClosing(true);
+                                closeDropdown();
                             }}
                         >
                             <div className="rh-work-app-card-thumbnail">
@@ -760,7 +791,7 @@ function RhWorkbenchAppSelect({ savedApps, webappId, setWebappId, onOpenSettings
                                     onClick={(ev) => {
                                         ev.stopPropagation();
                                         onRemoveSavedApp(String(opt.id));
-                                        setIsClosing(true);
+                                        closeDropdown();
                                     }}
                                     title="从列表中移除此应用"
                                     role="button"
@@ -916,6 +947,7 @@ export function RhWorkPanel({
     uploadImageFormat = RH_PS_CAPTURE_UPLOAD_FORMAT,
     successSoundFile = "",
     failSoundFile = "",
+    definitionRefreshTick = 0,
     onRunsChange,
     sharedTaskRuns,
     onDismissSharedRun,
@@ -958,6 +990,7 @@ export function RhWorkPanel({
     const rhWorkRootRef = useRef(/** @type {HTMLDivElement | null} */ (null));
     /** 已成功加载应用定义的签名，避免切走 RH 再回来时重复 loadDefinition 冲掉表单 */
     const loadedDefSigRef = useRef("");
+    const lastDefinitionRefreshTickRef = useRef(definitionRefreshTick);
 
     /** 应用介绍折叠状态，默认收起 */
     const [introExpanded, setIntroExpanded] = useState(false);
@@ -1425,7 +1458,7 @@ export function RhWorkPanel({
                                 const placeGroupName = resolvedSnap.appMetaName
                                     ? `${resolvedSnap.appMetaName} 生成`
                                     : "RunningHub 生成";
-                                const autoReturnOn = autoReturnEnabled !== false && autoReturnEnabled !== "false";
+                                const autoReturnOn = readAutoReturnEnabled(autoReturnEnabled !== false && autoReturnEnabled !== "false");
                                 if (!autoReturnOn) {
                                     successMsg = `${successMsg} · 自动回传已关闭，等待手动贴回`;
                                 }
@@ -1569,7 +1602,7 @@ export function RhWorkPanel({
                 elapsedSec: elapsedNow(),
             };
         },
-        [pushStatus, resolveFullCapturesForSnapshot, setTaskIdLast, setNodeErrors, onRefreshAccount, isDuckDecodeEnabledNow, autoReturnEnabled, enqueueRhAutoPlace]
+        [pushStatus, resolveFullCapturesForSnapshot, setTaskIdLast, setNodeErrors, onRefreshAccount, isDuckDecodeEnabledNow, enqueueRhAutoPlace]
     );
 
     const {
@@ -1692,7 +1725,12 @@ export function RhWorkPanel({
             const msg = e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
             const isCancelled = /取消|cancelled|aborted/i.test(msg);
             if (!isCancelled) {
-                setLoadError(msg);
+                setLoadError(formatRhError({
+                    status: e?.status,
+                    code: e?.code,
+                    message: msg,
+                    rawBody: e?.rawBody,
+                }));
                 setAppMeta(null);
                 setRows([]);
                 setFieldValues({});
@@ -1721,6 +1759,14 @@ export function RhWorkPanel({
         if (loadedDefSigRef.current === sig) return;
         void loadDefRef.current();
     }, [isActiveProduct, apiKeyTrim, webappIdTrim]);
+
+    useEffect(() => {
+        if (lastDefinitionRefreshTickRef.current === definitionRefreshTick) return;
+        lastDefinitionRefreshTickRef.current = definitionRefreshTick;
+        if (!isActiveProduct || !apiKeyTrim || !webappIdTrim) return;
+        loadedDefSigRef.current = "";
+        void loadDefRef.current();
+    }, [definitionRefreshTick, isActiveProduct, apiKeyTrim, webappIdTrim]);
 
     /** 已有 Key 但工作页清空应用选择时：参数/上传/批处理回到初始态，避免残留上一应用 UI */
     useEffect(() => {
@@ -2128,6 +2174,7 @@ export function RhWorkPanel({
                     onOpenSettings={onOpenSettings}
                     onRemoveSavedApp={setSavedApps ? handleRemoveSavedApp : undefined}
                     disabled={!apiKeyTrim}
+                    active={isActiveProduct}
                 />
             </div>
 
@@ -2290,13 +2337,14 @@ export function RhWorkPanel({
                                 <div className="rh-task-empty">暂无任务</div>
                             ) : (
                                 taskRunsForQueue.map((run) => {
-                                    const platform = run.platform === "forge" ? "forge" : run.platform === "comfy" ? "comfy" : "runninghub";
+                                    const platform = run.platform === "forge" ? "forge" : run.platform === "comfy" ? "comfy" : run.platform === "banana" ? "banana" : "runninghub";
                                     const isComfyRun = platform === "comfy";
                                     const isForgeRun = platform === "forge";
-                                    const platformLabel = isForgeRun ? "Forge UI" : isComfyRun ? "Comfy UI" : "RunningHub";
+                                    const isBananaRun = platform === "banana";
+                                    const platformLabel = isForgeRun ? "Forge UI" : isComfyRun ? "Comfy UI" : isBananaRun ? "Banana" : "RunningHub";
                                     const snap = run.snapshot && typeof run.snapshot === "object" ? run.snapshot : null;
-                                    const appName = isForgeRun ? (run.presetName || "Forge UI") : isComfyRun ? (run.workflowName || "Comfy UI") : (snap?.appMetaName || run.presetName || "RunningHub");
-                                    const uploadsForPreview = (isComfyRun || isForgeRun) ? run.pendingUploads : snap?.pendingUploads;
+                                    const appName = isForgeRun ? (run.presetName || "Forge UI") : isComfyRun ? (run.workflowName || "Comfy UI") : isBananaRun ? (`${run.provider || "Banana"} · ${run.model || "Banana"}`) : (snap?.appMetaName || run.presetName || "RunningHub");
+                                    const uploadsForPreview = (isComfyRun || isForgeRun || isBananaRun) ? run.pendingUploads : snap?.pendingUploads;
                                     const previewBase64 = uploadsForPreview ? Object.values(uploadsForPreview).find((u) => u?.previewBase64)?.previewBase64 : null;
                                     const submitTime = new Date(run.startTime);
                                     const timeStr = `${submitTime.getHours().toString().padStart(2, '0')}:${submitTime.getMinutes().toString().padStart(2, '0')}`;
@@ -2327,15 +2375,11 @@ export function RhWorkPanel({
                                         : "";
                                     const stageLine = run.status === "running" ? (run.displayStage || run.stageText || run.message || "") : detailLine;
                                     const batchTotal = Number(run.batchImageTotal || run.batchTotal || 0);
-                                    const batchLine = (isComfyRun || isForgeRun) && batchTotal > 1 ? `返回 ${Number(run.batchDone || 0)} 张/共 ${batchTotal} 张` : "";
+                                    const batchLine = (isComfyRun || isForgeRun || isBananaRun) && batchTotal > 1 ? `返回 ${Number(run.batchDone || 0)} 张/共 ${batchTotal} 张` : "";
 
                                     return (
                                         <div key={run.id} className="rh-task-item">
-                                            {previewBase64 && (
-                                                <div className="rh-task-thumb">
-                                                    <img src={previewBase64} alt="" className="rh-task-thumb-img" />
-                                                </div>
-                                            )}
+                                            {previewBase64 && <TaskPreviewThumb src={previewBase64} title="查看任务大图" />}
                                             <div className="rh-task-status-wrapper">
                                                 <div className={`rh-task-status ${statusClass}`}></div>
                                             </div>

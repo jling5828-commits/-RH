@@ -1,6 +1,7 @@
 export const RESULT_WORKBENCH_RUNNINGHUB = "runninghub";
 export const RESULT_WORKBENCH_COMFY = "comfy";
 export const RESULT_WORKBENCH_FORGE = "forge";
+export const RESULT_WORKBENCH_BANANA = "banana";
 export const RESULT_FOLDER_STORAGE_CHANGED = "xlrh-result-folder-storage-changed";
 export const RESULT_FOLDER_OVERRIDE_NONE = "__xlrh_no_folder__";
 

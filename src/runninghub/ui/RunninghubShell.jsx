@@ -6,21 +6,11 @@ import { useStatus } from "../../utils/StatusContext.jsx";
 import { readCompatLocalStorage, writeCompatLocalStorage } from "../../utils/storageKeyCompat.js";
 import { ComfyShell } from "../../comfy/ComfyShell.jsx";
 import { ForgeShell } from "../../forge/ForgeShell.jsx";
+import { BananaShell } from "../../banana/BananaShell.jsx";
 
 function hexToRgb(hex) {
     const h = hex.replace("#", "");
     return [parseInt(h.substring(0, 2), 16), parseInt(h.substring(2, 4), 16), parseInt(h.substring(4, 6), 16)].join(", ");
-}
-
-function formatCacheBytes(bytes) {
-    const n = Number(bytes || 0);
-    if (!Number.isFinite(n) || n <= 0) return "0 MB";
-    if (n >= 1024 * 1024 * 1024) return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
-    return `${(n / 1024 / 1024).toFixed(2)} MB`;
-}
-
-function formatUploadLongEdgeLabel(value) {
-    return Number(value) === 0 ? "原比例" : `${value}px`;
 }
 
 import {
@@ -40,24 +30,25 @@ import {
     RH_SAVED_APPS_KEY,
 } from "../rhAppStorage.js";
 import { RH_APP_PRESETS_STORAGE_KEY } from "../rhPresetStorage.js";
+import { formatRhError } from "../rhErrorCodes.js";
+import { notifyPlaceEdgeFeatherChanged } from "../../utils/placeEdgeFeatherOpts.js";
 import {
-    readPlaceEdgeFeatherEnabledFromStorage,
-    readPlaceKeepSelectionFromStorage,
-    notifyPlaceEdgeFeatherChanged,
-    PLACE_EDGE_FEATHER_CHANGED,
-} from "../../utils/placeEdgeFeatherOpts.js";
-import {
-    RESULT_FOLDER_STORAGE_CHANGED,
     RESULT_WORKBENCH_RUNNINGHUB,
-    getEffectiveResultFolderToken,
-    hasWorkbenchFolderOverride,
-    clearOverrideResultFolderToken,
-    setOverrideResultFolderToken,
     migrateRunningHubResultFolderToImageCacheDefault,
 } from "../../utils/resultFolderTokens.js";
 
 syncRhBuiltinMigrationsToLocalStorage();
 import { SortableContainer, SortableElement, SortableHandle, arrayMove } from "react-sortable-hoc";
+
+function rhShellErrorMessage(error) {
+    const message = error && typeof error === "object" && "message" in error ? String(error.message) : String(error);
+    return formatRhError({
+        status: error?.status,
+        code: error?.code,
+        message,
+        rawBody: error?.rawBody,
+    });
+}
 import "../../components/TopBar.css";
 import "../../components/WorkPanel/WorkPanel.css";
 import "../../components/Settings.css";
@@ -65,22 +56,23 @@ import "./RunninghubShell.css";
 import { RhWorkPanel } from "./RhWorkPanel.jsx";
 import { RhAppearanceSettings } from "./RhAppearanceSettings.jsx";
 import { SettingsCard } from "../../components/settings/SettingsCard.jsx";
+import {
+    SharedInteractionSettingsContent,
+    SharedPersonalizationSettingsContent,
+} from "../../components/settings/SharedInteractionSettingsCard.jsx";
+import { ProductModeButton } from "../../components/ProductModeButton.jsx";
 import { rhFetchAccountStatus } from "../taskApi.js";
 import { webappIdToCanonicalString, fetchAiAppInputs } from "../appDemo.js";
 import { RH_DEFAULT_BASE_URL } from "../constants.js";
-import { formatRhAppDisplayLabel, useDropdownPosition, RH_APP_MENU_MAX_HEIGHT_PX } from "./runninghubDropdownUtils.js";
+import { formatRhAppDisplayLabel, requestCloseRhAppDropdowns, useDropdownPosition, RH_APP_MENU_MAX_HEIGHT_PX, RH_CLOSE_APP_DROPDOWNS_EVENT, RH_DROPDOWN_OUTSIDE_EVENTS } from "./runninghubDropdownUtils.js";
 import { useRhApiKey } from "../hooks/useRhApiKey.js";
 import { RhApiKeySettingsBlock } from "./RhApiKeySettingsBlock.jsx";
 import { IconRhGlyph } from "../../components/ProductSwitcherMenu.jsx";
 import { isInWebView, shell as bridgeShell, storage as bridgeStorage } from "../../bridge/uxpBridge.js";
-import { clearResultImageCache } from "../../utils/imageSaver.js";
-import { normalizeRhImageLongEdgeMax, RH_IMAGE_LONG_EDGE_OPTIONS } from "../rhImageLongEdge.js";
 import { DEFAULT_FAIL_SOUND, DEFAULT_SUCCESS_SOUND, listSoundFiles, openSoundFolder } from "../../utils/playSound.js";
 import {
     RH_PS_CAPTURE_UPLOAD_FORMAT,
     RH_UPLOAD_DEFAULT_LONG_EDGE,
-    RH_UPLOAD_IMAGE_FORMAT_OPTIONS,
-    normalizeRhUploadImageFormat,
 } from "./xlrhRhWorkPanelLogic.js";
 
 const uxpStorage = require("uxp").storage;
@@ -125,45 +117,6 @@ function migrateRhAppearanceDefaults() {
 }
 
 migrateRhAppearanceDefaults();
-
-async function openResultCacheFolderWithStatus(pushStatus) {
-    pushStatus("已收到打开缓存指令，正在获取路径...", 10000);
-    try {
-        if (isInWebView()) {
-            pushStatus("正在请求打开回图缓存...", 15000);
-            try {
-                const res = await bridgeStorage.localFileSystem.openResultImageCacheFolder();
-                const path = String(res?.nativePath || "").trim();
-                const via = res?.opener ? ` · ${res.opener}` : "";
-                pushStatus(path ? `已请求打开回图缓存：${path}${via}` : "已请求打开回图缓存文件夹", 10000);
-                return;
-            } catch (hostOpenErr) {
-                const info = await bridgeStorage.localFileSystem.getResultImageCacheInfo();
-                const path = String(info?.nativePath || "").trim();
-                if (!path) throw hostOpenErr;
-                await bridgeShell.openPath(path);
-                pushStatus(`已请求打开回图缓存：${path}`, 10000);
-                return;
-            }
-        }
-
-        const folder = await uxpFs.getDataFolder();
-        let cacheFolder = null;
-        try {
-            cacheFolder = await folder.getEntry("image_cache");
-        } catch (_) {
-            cacheFolder = await folder.createFolder("image_cache");
-        }
-        const path = cacheFolder?.nativePath || "";
-        if (!path) throw new Error("无法获取缓存文件夹路径");
-        pushStatus(`正在请求打开回图缓存：${path}`, 15000);
-        await uxpShell.openPath(path);
-        pushStatus(`已请求打开回图缓存：${path}`, 10000);
-    } catch (e) {
-        const msg = e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
-        pushStatus(`打开回图缓存失败：${msg}`, 20000);
-    }
-}
 
 function formatRhTopBarDateTime(ts) {
     if (!ts) return "—";
@@ -210,29 +163,6 @@ const IconHelp = () => (
     </svg>
 );
 
-function nextProductMode(activeProduct) {
-    if (activeProduct === "runninghub") return "comfy";
-    if (activeProduct === "comfy") return "forge";
-    return "runninghub";
-}
-
-function ProductModeButton({ activeProduct, onChange }) {
-    const target = nextProductMode(activeProduct);
-    const title = target === "forge" ? "切换到 Forge UI" : target === "comfy" ? "切换到 Comfy UI" : "切换到 RunningHub";
-    const label = activeProduct === "forge" ? "forge ui" : activeProduct === "comfy" ? "comfy ui" : "runninghub";
-    return (
-        <button
-            type="button"
-            className="icon-btn xlrh-product-mode-btn"
-            onClick={() => onChange?.(target)}
-            title={title}
-            aria-label={title}
-        >
-            {label}
-        </button>
-    );
-}
-
 const RUNNINGHUB_API_KEY_URL = "https://www.runninghub.cn/enterprise-api/sharedApi";
 
 function RhTopBar({
@@ -240,13 +170,12 @@ function RhTopBar({
     onToggleView,
     onRefresh,
     onRefreshApps,
+    onRefreshDefinition,
     duckDecodeEnabled,
     onToggleDuckDecode,
     accountStatus,
     currentKey,
     isActiveProduct,
-    activeProduct,
-    onChangeProduct,
     onPopupOpenFetchAccount,
 }) {
     const { pushStatus } = useStatus();
@@ -270,7 +199,7 @@ function RhTopBar({
     }, []);
 
     const handleRefresh = useCallback(async () => {
-        if (!currentKey && typeof onRefreshApps !== "function") {
+        if (!currentKey && typeof onRefreshApps !== "function" && typeof onRefreshDefinition !== "function") {
             pushStatus("请先配置 API Key", 3000);
             return;
         }
@@ -282,9 +211,15 @@ function RhTopBar({
                 await onRefreshApps();
             }
         } finally {
-            setIsRefreshing(false);
+            try {
+                if (typeof onRefreshDefinition === "function") {
+                    await onRefreshDefinition();
+                }
+            } finally {
+                setIsRefreshing(false);
+            }
         }
-    }, [currentKey, onRefresh, onRefreshApps, pushStatus]);
+    }, [currentKey, onRefresh, onRefreshApps, onRefreshDefinition, pushStatus]);
 
     const handleSettingsClick = () => {
         onToggleView();
@@ -336,8 +271,7 @@ function RhTopBar({
                 >
                     <img src="icons/duck_toggle.png" alt="" className="rh-duck-toggle-img" />
                 </button>
-                <ProductModeButton activeProduct={activeProduct} onChange={onChangeProduct} />
-                <div className="icon-btn" onClick={handleRefresh} title="刷新余额并获取全部AI应用封面" key={`refresh-btn-${refreshKey}`}> 
+                <div className="icon-btn" onClick={handleRefresh} title="刷新余额、AI应用和参数设置" key={`refresh-btn-${refreshKey}`}> 
                     <IconRefresh className={isRefreshing ? "rh-spinning" : ""} key={refreshKey} />
                 </div>
                 <div className="icon-btn rh-help-btn" onClick={() => setShowHelpPopup(true)} title="使用说明">
@@ -391,16 +325,42 @@ function RhAppSelect({ options, value, onChange, placeholder, disabled = false, 
     const dropdownStyle = useDropdownPosition(containerRef, isVisible, false, RH_APP_MENU_MAX_HEIGHT_PX);
 
     useEffect(() => {
+        if (!isVisible) return undefined;
         const h = (e) => {
-            if (containerRef.current?.contains(e.target)) return;
+            if (e.target && containerRef.current?.contains(e.target)) return;
             const dd = document.querySelector(".rh-app-select-dropdown-portal");
-            if (dd?.contains(e.target)) return;
+            if (e.target && dd?.contains(e.target)) return;
             if (isOpen) setIsClosing(true);
             resetSortState();
         };
-        if (isOpen) document.addEventListener("mousedown", h);
-        return () => document.removeEventListener("mousedown", h);
-    }, [isOpen]);
+        const blur = () => {
+            if (isOpen) setIsClosing(true);
+            resetSortState();
+        };
+        const key = (e) => {
+            if (e.key !== "Escape") return;
+            setIsClosing(true);
+            resetSortState();
+        };
+        RH_DROPDOWN_OUTSIDE_EVENTS.forEach((type) => document.addEventListener(type, h, true));
+        document.addEventListener("keydown", key, true);
+        window.addEventListener("blur", blur);
+        return () => {
+            RH_DROPDOWN_OUTSIDE_EVENTS.forEach((type) => document.removeEventListener(type, h, true));
+            document.removeEventListener("keydown", key, true);
+            window.removeEventListener("blur", blur);
+        };
+    }, [isOpen, isVisible]);
+
+    useEffect(() => {
+        const h = () => {
+            setIsClosing(false);
+            setIsOpen(false);
+            resetSortState();
+        };
+        window.addEventListener(RH_CLOSE_APP_DROPDOWNS_EVENT, h);
+        return () => window.removeEventListener(RH_CLOSE_APP_DROPDOWNS_EVENT, h);
+    }, []);
 
     useEffect(() => {
         if (isClosing) {
@@ -634,8 +594,12 @@ function RhSettingsPlaceholder({
     setCustomBgOpacity,
     customBgBlur,
     setCustomBgBlur,
+    themeMode,
+    setThemeMode,
     rhAutoReturnEnabled,
     setRhAutoReturnEnabled,
+    concurrentReturnGroupEnabled,
+    setConcurrentReturnGroupEnabled,
     uploadLongEdgeMax,
     setUploadLongEdgeMax,
     uploadImageFormat,
@@ -645,6 +609,8 @@ function RhSettingsPlaceholder({
     setSuccessSoundFile,
     failSoundFile,
     setFailSoundFile,
+    soundMuted,
+    setSoundMuted,
     onOpenSoundFolder,
     onRefreshSoundFiles,
     textColor,
@@ -657,15 +623,6 @@ function RhSettingsPlaceholder({
     const [rhSettingsCardListSorting, setRhSettingsCardListSorting] = useState(false);
     const [newAppInput, setNewAppInput] = useState("");
     const [addingApp, setAddingApp] = useState(false);
-    const [clearCacheConfirmStep, setClearCacheConfirmStep] = useState(0);
-    const [clearingResultCache, setClearingResultCache] = useState(false);
-
-    const [placeEdgeFeatherEnabled, setPlaceEdgeFeatherEnabled] = useState(() => readPlaceEdgeFeatherEnabledFromStorage());
-    const [placeKeepSelection, setPlaceKeepSelection] = useState(() => readPlaceKeepSelectionFromStorage());
-    const [rhResultFolderName, setRhResultFolderName] = useState("未选择（临时目录）");
-    const [rhResultFolderToken, setRhResultFolderToken] = useState("");
-    const [rhResultFolderHasOverride, setRhResultFolderHasOverride] = useState(false);
-    const openResultCacheGateRef = useRef(0);
 
     useEffect(() => {
         if (migrateRunningHubResultFolderToImageCacheDefault()) {
@@ -673,170 +630,9 @@ function RhSettingsPlaceholder({
         }
     }, [pushStatus]);
 
-    const refreshRhResultFolderName = useCallback(async () => {
-        const token = getEffectiveResultFolderToken(RESULT_WORKBENCH_RUNNINGHUB);
-        setRhResultFolderHasOverride(hasWorkbenchFolderOverride(RESULT_WORKBENCH_RUNNINGHUB));
-        setRhResultFolderToken(token || "");
-        if (!token) {
-            setRhResultFolderName("未选择（临时目录）");
-            return;
-        }
-        try {
-            const folder = await uxpFs.getEntryForPersistentToken(token);
-            setRhResultFolderName(folder?.name || "已选择回图文件夹");
-        } catch (_) {
-            setRhResultFolderName("目录失效，请重新选择");
-        }
-    }, []);
-
-    useEffect(() => {
-        refreshRhResultFolderName();
-        const h = () => refreshRhResultFolderName();
-        window.addEventListener(RESULT_FOLDER_STORAGE_CHANGED, h);
-        window.addEventListener("storage", h);
-        return () => {
-            window.removeEventListener(RESULT_FOLDER_STORAGE_CHANGED, h);
-            window.removeEventListener("storage", h);
-        };
-    }, [refreshRhResultFolderName]);
-
-    const handleChooseRhResultFolder = useCallback(async () => {
-        try {
-            const folder = await uxpFs.getFolder();
-            if (!folder) return;
-            const token = await uxpFs.createPersistentToken(folder);
-            setOverrideResultFolderToken(RESULT_WORKBENCH_RUNNINGHUB, token);
-            setRhResultFolderToken(token || "");
-            setRhResultFolderHasOverride(true);
-            setRhResultFolderName(folder.name || "已选择回图文件夹");
-            pushStatus(`回图文件夹已设置：${folder.name || "已选择文件夹"}`, 3000);
-        } catch (e) {
-            const msg = e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
-            pushStatus(`选择回图文件夹失败：${msg}`, 5000);
-        }
-    }, [pushStatus]);
-
-    const handleClearRhResultFolder = useCallback(() => {
-        clearOverrideResultFolderToken(RESULT_WORKBENCH_RUNNINGHUB);
-        setRhResultFolderHasOverride(false);
-        refreshRhResultFolderName();
-        pushStatus("已切换为默认回图缓存 image_cache", 3000);
-    }, [pushStatus, refreshRhResultFolderName]);
-
-    const handleOpenResultCacheFolder = useCallback(async () => {
-        const now = Date.now();
-        if (now - openResultCacheGateRef.current < 900) return;
-        openResultCacheGateRef.current = now;
-        await openResultCacheFolderWithStatus(pushStatus);
-    }, [pushStatus]);
-
-    const triggerOpenResultCacheFolder = useCallback((e) => {
-        e?.preventDefault?.();
-        e?.stopPropagation?.();
-        handleOpenResultCacheFolder();
-    }, [handleOpenResultCacheFolder]);
-
-    const handleClearResultCacheConfirm = useCallback(async () => {
-        if (clearingResultCache) return;
-        if (clearCacheConfirmStep < 3) {
-            setClearCacheConfirmStep((s) => Math.min(3, Math.max(1, s + 1)));
-            return;
-        }
-        setClearingResultCache(true);
-        pushStatus("正在清理回图缓存...", 0);
-        try {
-            const res = isInWebView()
-                ? await bridgeStorage.localFileSystem.clearResultImageCache()
-                : await clearResultImageCache();
-            const fileCount = Number(res?.files || 0);
-            const folderCount = Number(res?.folders || 0);
-            const sizeText = formatCacheBytes(res?.bytes || 0);
-            setClearCacheConfirmStep(0);
-            pushStatus(`回图缓存已删除：${fileCount} 个文件 / ${folderCount} 个文件夹 / ${sizeText}`, 6000);
-        } catch (e) {
-            const msg = e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
-            pushStatus(`清理回图缓存失败：${msg}`, 7000);
-        } finally {
-            setClearingResultCache(false);
-        }
-    }, [clearCacheConfirmStep, clearingResultCache, pushStatus]);
-
-    useEffect(() => {
-        writeCompatLocalStorage("xlrh_place_edge_feather_enabled", String(placeEdgeFeatherEnabled));
-    }, [placeEdgeFeatherEnabled]);
-    useEffect(() => {
-        writeCompatLocalStorage("xlrh_place_keep_selection", String(placeKeepSelection));
-    }, [placeKeepSelection]);
-    useEffect(() => {
-        const handler = (e) => {
-            if (e?.detail && typeof e.detail.enabled === "boolean") {
-                setPlaceEdgeFeatherEnabled(e.detail.enabled);
-            } else {
-                setPlaceEdgeFeatherEnabled(readPlaceEdgeFeatherEnabledFromStorage());
-            }
-            if (e?.detail && typeof e.detail.keepSelection === "boolean") {
-                setPlaceKeepSelection(e.detail.keepSelection);
-            } else {
-                setPlaceKeepSelection(readPlaceKeepSelectionFromStorage());
-            }
-        };
-        window.addEventListener(PLACE_EDGE_FEATHER_CHANGED, handler);
-        return () => window.removeEventListener(PLACE_EDGE_FEATHER_CHANGED, handler);
-    }, []);
-
-    const handleCustomBgImageSelect = useCallback(() => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.onchange = (e) => {
-            const file = e.target.files?.[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const base64 = event.target.result;
-                    setCustomBgImage(base64);
-                    setCustomBgEnabled(true);
-                };
-                reader.readAsDataURL(file);
-            }
-        };
-        input.click();
-    }, [setCustomBgImage, setCustomBgEnabled]);
-
-    const handleClearCustomBg = useCallback(() => {
-        setCustomBgImage("");
-        setCustomBgEnabled(false);
-    }, [setCustomBgImage, setCustomBgEnabled]);
-
     const currentKey = (apiKey || "").trim();
     const keyValid = !!currentKey && !accountStatus?.error && !accountStatus?.loading;
     const validSavedApps = Array.isArray(savedApps) ? savedApps : [];
-    const rhAutoReturnOn = rhAutoReturnEnabled !== false && rhAutoReturnEnabled !== "false";
-    const normalizedUploadLongEdgeMax = normalizeRhImageLongEdgeMax(uploadLongEdgeMax);
-    const uploadLongEdgeIndex = Math.max(
-        0,
-        RH_IMAGE_LONG_EDGE_OPTIONS.findIndex((n) => n === normalizedUploadLongEdgeMax)
-    );
-    const uploadLongEdgeLabel = formatUploadLongEdgeLabel(normalizedUploadLongEdgeMax);
-    const uploadImageFormatValue = normalizeRhUploadImageFormat(uploadImageFormat);
-    const uploadImageFormatLabel = uploadImageFormatValue === "png" ? "PNG" : "JPG";
-    const soundOptions = Array.isArray(soundFileOptions) && soundFileOptions.length ? soundFileOptions : [DEFAULT_SUCCESS_SOUND, DEFAULT_FAIL_SOUND];
-    const handleUploadLongEdgeIndexChange = useCallback((rawIndex) => {
-        const idx = Math.max(0, Math.min(RH_IMAGE_LONG_EDGE_OPTIONS.length - 1, Number(rawIndex) || 0));
-        setUploadLongEdgeMax(RH_IMAGE_LONG_EDGE_OPTIONS[idx]);
-    }, [setUploadLongEdgeMax]);
-    const handleUploadImageFormatChange = useCallback((format) => {
-        const next = normalizeRhUploadImageFormat(format);
-        setUploadImageFormat(next);
-        pushStatus(`上传图片格式已切换为 ${next === "png" ? "PNG" : "JPG"}`, 3000);
-    }, [pushStatus, setUploadImageFormat]);
-    const handleRhAutoReturnChange = useCallback((checked) => {
-        setRhAutoReturnEnabled(checked);
-        pushStatus(
-            checked ? "已开启自动回传" : "已关闭自动回传，回图会停在任务队列等待手动贴回",
-            checked ? 3000 : 5000
-        );
-    }, [pushStatus, setRhAutoReturnEnabled]);
 
     const appOptions = [
         { id: "__add_app__", label: "+ 添加应用" },
@@ -892,7 +688,7 @@ function RhSettingsPlaceholder({
             pushStatus(def?.coverUrl ? `已添加应用并获取封面：${name}` : `已添加应用：${name}`, 3500);
             return true;
         } catch (e) {
-            const msg = e && typeof e === "object" && "message" in e ? e.message : String(e);
+            const msg = rhShellErrorMessage(e);
             pushStatus(`添加失败：${msg}`, 6000);
             return false;
         } finally {
@@ -981,6 +777,77 @@ function RhSettingsPlaceholder({
             >
                 {orderedIds.map((cardId, index) => {
                     const cfg = cardConfig[cardId] || { icon: "?", title: cardId, cardClass: "" };
+                    if (cardId === "interaction") {
+                        return (
+                            <SortableSettingsCard key={cardId} index={index}>
+                                <SettingsCard
+                                    cardClass={cfg.cardClass}
+                                    icon={cfg.icon}
+                                    title={cfg.title}
+                                    defaultOpen={true}
+                                    dragHandle={<SettingsDragHandle icon={cfg.icon} />}
+                                >
+                                    <SharedInteractionSettingsContent
+                                        pushStatus={pushStatus}
+                                        workbenchId={RESULT_WORKBENCH_RUNNINGHUB}
+                                        rhAutoReturnEnabled={rhAutoReturnEnabled}
+                                        setRhAutoReturnEnabled={setRhAutoReturnEnabled}
+                                        concurrentReturnGroupEnabled={concurrentReturnGroupEnabled}
+                                        setConcurrentReturnGroupEnabled={setConcurrentReturnGroupEnabled}
+                                        uploadLongEdgeMax={uploadLongEdgeMax}
+                                        setUploadLongEdgeMax={setUploadLongEdgeMax}
+                                        uploadImageFormat={uploadImageFormat}
+                                        setUploadImageFormat={setUploadImageFormat}
+                                        soundMuted={soundMuted}
+                                        setSoundMuted={setSoundMuted}
+                                        soundFileOptions={soundFileOptions}
+                                        successSoundFile={successSoundFile}
+                                        setSuccessSoundFile={setSuccessSoundFile}
+                                        failSoundFile={failSoundFile}
+                                        setFailSoundFile={setFailSoundFile}
+                                        onOpenSoundFolder={onOpenSoundFolder}
+                                        onRefreshSoundFiles={onRefreshSoundFiles}
+                                    />
+                                </SettingsCard>
+                            </SortableSettingsCard>
+                        );
+                    }
+                    if (cardId === "personalization") {
+                        return (
+                            <SortableSettingsCard key={cardId} index={index}>
+                                <SettingsCard
+                                    cardClass={cfg.cardClass}
+                                    icon={cfg.icon}
+                                    title={cfg.title}
+                                    defaultOpen={true}
+                                    dragHandle={<SettingsDragHandle icon={cfg.icon} />}
+                                >
+                                    <SharedPersonalizationSettingsContent
+                                        themeMode={themeMode}
+                                        setThemeMode={setThemeMode}
+                                        themeColorStart={themeColorStart}
+                                        setThemeColorStart={setThemeColorStart}
+                                        themeColorEnd={themeColorEnd}
+                                        setThemeColorEnd={setThemeColorEnd}
+                                        opacity={opacity}
+                                        setOpacity={setOpacity}
+                                        blur={blur}
+                                        setBlur={setBlur}
+                                        customBgEnabled={customBgEnabled}
+                                        setCustomBgEnabled={setCustomBgEnabled}
+                                        customBgImage={customBgImage}
+                                        setCustomBgImage={setCustomBgImage}
+                                        customBgOpacity={customBgOpacity}
+                                        setCustomBgOpacity={setCustomBgOpacity}
+                                        customBgBlur={customBgBlur}
+                                        setCustomBgBlur={setCustomBgBlur}
+                                        textColor={textColor}
+                                        setTextColor={setTextColor}
+                                    />
+                                </SettingsCard>
+                            </SortableSettingsCard>
+                        );
+                    }
                     return (
                         <SortableSettingsCard key={cardId} index={index}>
                             <SettingsCard
@@ -1023,339 +890,17 @@ function RhSettingsPlaceholder({
                                                     }}
                                                 />
                                             </div>
+                                            <button
+                                                type="button"
+                                                className="rh-config-reset-btn rh-config-add-app-btn"
+                                                onClick={() => setShowAddAppPopup(true)}
+                                                disabled={!keyValid}
+                                            >
+                                                添加 AI 应用
+                                            </button>
                                             <div className="rh-app-bundle-actions">
                                                 <button type="button" className="rh-config-reset-btn" onClick={handleImportAppBundle}>导入集合包</button>
                                                 <button type="button" className="rh-config-reset-btn" onClick={() => setShowExportBundlePopup(true)}>导出集合包</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                                {cardId === "interaction" && (
-                                    <div className="rh-interaction-content">
-                                        <div className="rh-interaction-section">
-                                            <div className="rh-interaction-section-title">回图贴入</div>
-                                            <div className="rh-interaction-row">
-                                                <label className="rh-interaction-label">
-                                                    <span>自动回传</span>
-                                                    <span className="rh-interaction-desc">
-                                                        {rhAutoReturnOn ? "任务完成后自动贴回 PS" : "关闭后停在任务队列等待手动贴回"}
-                                                    </span>
-                                                </label>
-                                                <label className="rh-toggle">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={rhAutoReturnOn}
-                                                        onChange={(e) => handleRhAutoReturnChange(e.target.checked)}
-                                                    />
-                                                    <span className="rh-toggle-slider"></span>
-                                                </label>
-                                            </div>
-                                            <div className="rh-interaction-row rh-upload-setting-row">
-                                                <div className="rh-upload-setting-block">
-                                                    <div className="rh-upload-setting-head">
-                                                        <label className="rh-interaction-label" htmlFor="rh-upload-longedge-slider">
-                                                            <span>上传长边</span>
-                                                            <span className="rh-interaction-desc">截图上传前按长边压到指定尺寸</span>
-                                                        </label>
-                                                        <span className="rh-upload-setting-value">{uploadLongEdgeLabel}</span>
-                                                    </div>
-                                                    <input
-                                                        id="rh-upload-longedge-slider"
-                                                        className="rh-upload-setting-slider"
-                                                        type="range"
-                                                        min="0"
-                                                        max={RH_IMAGE_LONG_EDGE_OPTIONS.length - 1}
-                                                        step="1"
-                                                        value={uploadLongEdgeIndex}
-                                                        onChange={(e) => handleUploadLongEdgeIndexChange(e.target.value)}
-                                                        aria-label="上传长边"
-                                                    />
-                                                    <div className="rh-longedge-marks" aria-hidden="true">
-                                                        {RH_IMAGE_LONG_EDGE_OPTIONS.map((n) => (
-                                                            <span
-                                                                key={n}
-                                                                className={`rh-longedge-mark ${n === normalizedUploadLongEdgeMax ? "active" : ""}`}
-                                                            >
-                                                                {formatUploadLongEdgeLabel(n)}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="rh-interaction-row rh-upload-format-row">
-                                                <label className="rh-interaction-label">
-                                                    <span>上传图片格式</span>
-                                                    <span className="rh-interaction-desc">当前 {uploadImageFormatLabel}，JPG 更小，PNG 保留透明通道</span>
-                                                </label>
-                                                <div className="rh-interaction-tone-switch rh-upload-format-switch" role="group" aria-label="上传图片格式">
-                                                    {RH_UPLOAD_IMAGE_FORMAT_OPTIONS.map((item) => (
-                                                        <button
-                                                            key={item.value}
-                                                            type="button"
-                                                            className={`rh-interaction-tone-btn ${uploadImageFormatValue === item.value ? "active" : ""}`}
-                                                            onClick={() => handleUploadImageFormatChange(item.value)}
-                                                        >
-                                                            {item.label}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                            <div className="rh-interaction-row rh-sound-row">
-                                                <label className="rh-interaction-label">
-                                                    <span>回图成功音效</span>
-                                                    <span className="rh-interaction-desc">{successSoundFile}</span>
-                                                </label>
-                                                <select className="rh-sound-select" value={successSoundFile} onFocus={onRefreshSoundFiles} onChange={(e) => setSuccessSoundFile(e.target.value)}>
-                                                    {soundOptions.map((name) => <option key={`ok-${name}`} value={name}>{name}</option>)}
-                                                </select>
-                                            </div>
-                                            <div className="rh-interaction-row rh-sound-row">
-                                                <label className="rh-interaction-label">
-                                                    <span>回图失败音效</span>
-                                                    <span className="rh-interaction-desc">{failSoundFile}</span>
-                                                </label>
-                                                <select className="rh-sound-select" value={failSoundFile} onFocus={onRefreshSoundFiles} onChange={(e) => setFailSoundFile(e.target.value)}>
-                                                    {soundOptions.map((name) => <option key={`fail-${name}`} value={name}>{name}</option>)}
-                                                </select>
-                                            </div>
-                                            <div className="rh-interaction-row rh-result-folder-row">
-                                                <label className="rh-interaction-label">
-                                                    <span>语音文件夹</span>
-                                                    <span className="rh-interaction-desc">插件安装目录 / voices</span>
-                                                </label>
-                                                <div className="rh-folder-actions">
-                                                    <button type="button" className="rh-folder-btn rh-folder-btn-muted rh-folder-btn-open" onClick={onOpenSoundFolder}>打开</button>
-                                                </div>
-                                            </div>
-                                            <div className="rh-interaction-row rh-result-folder-row" onDoubleClick={triggerOpenResultCacheFolder}>
-                                                <label className="rh-interaction-label">
-                                                    <span>回图文件夹</span>
-                                                    <span className="rh-interaction-desc">
-                                                        {rhResultFolderToken ? rhResultFolderName : "默认 PluginData / image_cache"}
-                                                    </span>
-                                                </label>
-                                                <div className="rh-folder-actions">
-                                                    <button
-                                                        type="button"
-                                                        className="rh-folder-btn"
-                                                        onClick={handleChooseRhResultFolder}
-                                                    >
-                                                        选择
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        className="rh-folder-btn rh-folder-btn-muted"
-                                                        onClick={handleClearRhResultFolder}
-                                                    >
-                                                        默认
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div className="rh-interaction-row rh-result-folder-row">
-                                                <label className="rh-interaction-label">
-                                                    <span>回图缓存</span>
-                                                    <span className="rh-interaction-desc">默认 image_cache，可打开查看或直接清空</span>
-                                                </label>
-                                                <div className="rh-folder-actions">
-                                                    <button
-                                                        type="button"
-                                                        className="rh-folder-btn rh-folder-btn-muted rh-folder-btn-open"
-                                                        onPointerDownCapture={triggerOpenResultCacheFolder}
-                                                        onMouseDownCapture={triggerOpenResultCacheFolder}
-                                                        onClick={triggerOpenResultCacheFolder}
-                                                        disabled={clearingResultCache}
-                                                    >
-                                                        打开
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        className="rh-folder-btn rh-folder-btn-danger"
-                                                        onClick={() => setClearCacheConfirmStep(1)}
-                                                        disabled={clearingResultCache}
-                                                    >
-                                                        {clearingResultCache ? "清理中" : "清空"}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div className="rh-interaction-row">
-                                                <label className="rh-interaction-label">
-                                                    <span>边缘软边</span>
-                                                    <span className="rh-interaction-desc">贴入返图时自动添加渐变蒙版，使边缘自然过渡</span>
-                                                </label>
-                                                <label className="rh-toggle">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={placeEdgeFeatherEnabled}
-                                                        onChange={(e) => {
-                                                            setPlaceEdgeFeatherEnabled(e.target.checked);
-                                                            notifyPlaceEdgeFeatherChanged({ enabled: e.target.checked });
-                                                        }}
-                                                    />
-                                                    <span className="rh-toggle-slider"></span>
-                                                </label>
-                                            </div>
-                                            <div className="rh-interaction-row">
-                                                <label className="rh-interaction-label">
-                                                    <span>保留选区</span>
-                                                    <span className="rh-interaction-desc">贴入完成后恢复矩形选区</span>
-                                                </label>
-                                                <label className="rh-toggle">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={placeKeepSelection}
-                                                        onChange={(e) => {
-                                                            setPlaceKeepSelection(e.target.checked);
-                                                            notifyPlaceEdgeFeatherChanged({ keepSelection: e.target.checked });
-                                                        }}
-                                                    />
-                                                    <span className="rh-toggle-slider"></span>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                                {cardId === "personalization" && (
-                                    <div className="rh-personalization-content">
-                                        <div className="rh-personalization-section">
-                                            <div className="rh-personalization-section-title">自定义背景</div>
-                                            <div className="rh-personalization-bg-controls">
-                                                <div className="rh-personalization-bg-toggle">
-                                                    <label className="rh-toggle">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={customBgEnabled}
-                                                            onChange={(e) => setCustomBgEnabled(e.target.checked)}
-                                                        />
-                                                        <span className="rh-toggle-slider"></span>
-                                                    </label>
-                                                    <span className="rh-personalization-bg-label">启用自定义背景</span>
-                                                </div>
-                                                {customBgEnabled && (
-                                                    <>
-                                                        <div className="rh-personalization-bg-preview-wrapper">
-                                                            {customBgImage ? (
-                                                                <div className="rh-personalization-bg-preview">
-                                                                    <img src={customBgImage} alt="背景预览" />
-                                                                    <button 
-                                                                        className="rh-personalization-bg-clear"
-                                                                        onClick={handleClearCustomBg}
-                                                                        title="清除背景"
-                                                                    >
-                                                                        ×
-                                                                    </button>
-                                                                </div>
-                                                            ) : (
-                                                                <button 
-                                                                    className="rh-personalization-bg-select"
-                                                                    onClick={handleCustomBgImageSelect}
-                                                                >
-                                                                    <span className="rh-personalization-bg-icon">🖼️</span>
-                                                                    <span>选择图片</span>
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                        {customBgImage && (
-                                                            <>
-                                                                <div className="rh-personalization-slider-item">
-                                                                    <label>背景透明度: {Math.round(customBgOpacity * 100)}%</label>
-                                                                    <div className="rh-personalization-slider-wrapper">
-                                                                        <input
-                                                                            type="range"
-                                                                            min="0.05"
-                                                                            max="1"
-                                                                            step="0.05"
-                                                                            value={customBgOpacity}
-                                                                            onChange={(e) => setCustomBgOpacity(parseFloat(e.target.value))}
-                                                                            className="xlrh-slider"
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                                <div className="rh-personalization-slider-item">
-                                                                    <label>背景模糊: {customBgBlur}px</label>
-                                                                    <div className="rh-personalization-slider-wrapper">
-                                                                        <input
-                                                                            type="range"
-                                                                            min="0"
-                                                                            max="20"
-                                                                            step="1"
-                                                                            value={customBgBlur}
-                                                                            onChange={(e) => setCustomBgBlur(parseInt(e.target.value))}
-                                                                            className="xlrh-slider"
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="rh-personalization-section">
-                                            <div className="rh-personalization-section-title">主渐变</div>
-                                            <div className="rh-personalization-color-row">
-                                                <div className="rh-personalization-color-item">
-                                                    <label>起始颜色</label>
-                                                    <input
-                                                        type="color"
-                                                        value={themeColorStart}
-                                                        onChange={(e) => setThemeColorStart(e.target.value)}
-                                                        className="rh-color-picker"
-                                                    />
-                                                </div>
-                                                <div className="rh-personalization-color-item">
-                                                    <label>结束颜色</label>
-                                                    <input
-                                                        type="color"
-                                                        value={themeColorEnd}
-                                                        onChange={(e) => setThemeColorEnd(e.target.value)}
-                                                        className="rh-color-picker"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="rh-personalization-section">
-                                            <div className="rh-personalization-section-title">字体颜色</div>
-                                            <div className="rh-personalization-color-row">
-                                                <div className="rh-personalization-color-item">
-                                                    <label>全局字体颜色</label>
-                                                    <input
-                                                        type="color"
-                                                        value={textColor}
-                                                        onChange={(e) => setTextColor(e.target.value)}
-                                                        className="rh-color-picker"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="rh-personalization-section">
-                                            <div className="rh-personalization-section-title">玻璃效果</div>
-                                            <div className="rh-personalization-slider-item">
-                                                <label>透明度: {Math.round(opacity * 100)}%</label>
-                                                <div className="rh-personalization-slider-wrapper">
-                                                    <input
-                                                        type="range"
-                                                        min="0"
-                                                        max="1"
-                                                        step="0.05"
-                                                        value={opacity}
-                                                        onChange={(e) => setOpacity(parseFloat(e.target.value))}
-                                                        className="xlrh-slider"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="rh-personalization-slider-item">
-                                                <label>模糊程度: {blur}px</label>
-                                                <div className="rh-personalization-slider-wrapper">
-                                                    <input
-                                                        type="range"
-                                                        min="0"
-                                                        max="30"
-                                                        step="1"
-                                                        value={blur}
-                                                        onChange={(e) => setBlur(parseInt(e.target.value))}
-                                                        className="xlrh-slider"
-                                                    />
-                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -1365,43 +910,6 @@ function RhSettingsPlaceholder({
                     );
                 })}
             </SortableSettingsList>
-
-            {clearCacheConfirmStep > 0 && (
-                <div className="xl-popup-overlay" onClick={() => !clearingResultCache && setClearCacheConfirmStep(0)}>
-                    <div className="xl-popup-dialog xl-popup-dialog-danger" onClick={(e) => e.stopPropagation()}>
-                        <div className="xl-popup-icon">!</div>
-                        <div className="xl-popup-title">确认清空回图缓存 {clearCacheConfirmStep}/3</div>
-                        <div className="xl-popup-subtitle">
-                            将直接删除 PluginData / image_cache 内的缓存文件。
-                        </div>
-                        <div className="xl-popup-body">
-                            <div className="xl-danger-note">
-                                第三次确认后才会执行。自定义回图文件夹不会被清理。
-                            </div>
-                        </div>
-                        <div className="xl-popup-actions">
-                            <button
-                                className="xl-btn xl-btn-secondary"
-                                onClick={() => !clearingResultCache && setClearCacheConfirmStep(0)}
-                                disabled={clearingResultCache}
-                            >
-                                取消
-                            </button>
-                            <button
-                                className={`xl-btn xl-btn-danger ${clearingResultCache ? "is-loading" : ""}`}
-                                onClick={handleClearResultCacheConfirm}
-                                disabled={clearingResultCache}
-                            >
-                                {clearingResultCache
-                                    ? "清理中..."
-                                    : clearCacheConfirmStep >= 3
-                                      ? "第三次确认并清理"
-                                      : "继续确认"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {showExportBundlePopup && (
                 <div className="xl-popup-overlay" onClick={() => setShowExportBundlePopup(false)}>
@@ -1478,11 +986,12 @@ function RhSettingsPlaceholder({
 export function RunninghubShell({ isActiveProduct = true }) {
     const { pushStatus } = useStatus();
     const [activeProduct, setActiveProduct] = usePersistedState("xlrh_active_product", "runninghub");
-    const activeProductMode = activeProduct === "forge" ? "forge" : activeProduct === "comfy" ? "comfy" : "runninghub";
+    const activeProductMode = activeProduct === "banana" ? "banana" : activeProduct === "forge" ? "forge" : activeProduct === "comfy" ? "comfy" : "runninghub";
     const changeProduct = useCallback((mode) => {
-        const next = mode === "forge" ? "forge" : mode === "comfy" ? "comfy" : "runninghub";
+        const next = mode === "banana" ? "banana" : mode === "forge" ? "forge" : mode === "comfy" ? "comfy" : "runninghub";
+        requestCloseRhAppDropdowns();
         setActiveProduct(next);
-        pushStatus(next === "forge" ? "已切换到 Forge UI" : next === "comfy" ? "已切换到 Comfy UI" : "已切换到 RunningHub", 2500);
+        pushStatus(next === "banana" ? "已切换到 Banana" : next === "forge" ? "已切换到 Forge UI" : next === "comfy" ? "已切换到 Comfy UI" : "已切换到 RunningHub", 2500);
     }, [pushStatus, setActiveProduct]);
     const [inputFontSize, setInputFontSize] = useState(13);
     const loadFontSize = useCallback(() => {
@@ -1499,10 +1008,11 @@ export function RunninghubShell({ isActiveProduct = true }) {
     const accountStatusCacheKeyRef = useRef("");
     const [savedApps, setSavedApps] = usePersistedState(RH_SAVED_APPS_KEY, []);
     const [webappId, setWebappId] = usePersistedState("rh_webapp_id", "");
+    const [rhDefinitionRefreshTick, setRhDefinitionRefreshTick] = useState(0);
 
     const { apiKey, apiKeys, apiKeyMode, setApiKeyForMode, setApiKeyMode } = useRhApiKey();
-    const [themeColorStart, setThemeColorStart] = usePersistedState("rh_theme_color_start", "#4d58ff");
-    const [themeColorEnd, setThemeColorEnd] = usePersistedState("rh_theme_color_end", "#24ffb6");
+    const [themeColorStart, setThemeColorStart] = usePersistedState("rh_theme_color_start", "#38d7c8");
+    const [themeColorEnd, setThemeColorEnd] = usePersistedState("rh_theme_color_end", "#8b7cff");
     const [opacity, setOpacity] = usePersistedState("rh_opacity", RH_DEFAULT_OPACITY);
     const [blur, setBlur] = usePersistedState("rh_blur", RH_DEFAULT_BLUR);
     const [customBgEnabled, setCustomBgEnabled] = usePersistedState("rh_custom_bg_enabled", false);
@@ -1510,22 +1020,25 @@ export function RunninghubShell({ isActiveProduct = true }) {
     const [customBgOpacity, setCustomBgOpacity] = usePersistedState("rh_custom_bg_opacity", 0.3);
     const [customBgBlur, setCustomBgBlur] = usePersistedState("rh_custom_bg_blur", 5);
     const [textColor, setTextColor] = usePersistedState("rh_text_color", "#ffffff");
+    const [themeMode, setThemeMode] = usePersistedState("rh_theme_mode", "dark");
     const [duckDecodeEnabled, setDuckDecodeEnabled] = usePersistedState("rh_duck_decode_enabled", false);
     const [rhAutoReturnEnabled, setRhAutoReturnEnabled] = usePersistedState("rh_auto_return_enabled", true);
+    const [concurrentReturnGroupEnabled, setConcurrentReturnGroupEnabled] = usePersistedState("xlrh_concurrent_return_group_enabled", true);
     const [uploadLongEdgeMax, setUploadLongEdgeMax] = usePersistedState("rh_image_long_edge_max", RH_UPLOAD_DEFAULT_LONG_EDGE);
     const [uploadImageFormat, setUploadImageFormat] = usePersistedState("rh_upload_image_format", RH_PS_CAPTURE_UPLOAD_FORMAT);
     const [soundFileOptions, setSoundFileOptions] = useState([DEFAULT_SUCCESS_SOUND, DEFAULT_FAIL_SOUND]);
     const [successSoundFile, setSuccessSoundFile] = usePersistedState("rh_success_sound_file", DEFAULT_SUCCESS_SOUND);
     const [failSoundFile, setFailSoundFile] = usePersistedState("rh_fail_sound_file", DEFAULT_FAIL_SOUND);
-    const openResultCacheGateRef = useRef(0);
+    const [soundMuted, setSoundMuted] = usePersistedState("xlrh_sound_muted", false);
     const [rhTaskRuns, setRhTaskRuns] = useState([]);
     const [comfyTaskRuns, setComfyTaskRuns] = useState([]);
     const [forgeTaskRuns, setForgeTaskRuns] = useState([]);
+    const [bananaTaskRuns, setBananaTaskRuns] = useState([]);
     const taskActionRefs = useRef({});
     const sharedTaskRuns = useMemo(() => {
         const tagRuns = (runs, platform) => (Array.isArray(runs) ? runs : []).map((run) => ({ ...run, platform }));
-        return [...tagRuns(rhTaskRuns, "runninghub"), ...tagRuns(comfyTaskRuns, "comfy"), ...tagRuns(forgeTaskRuns, "forge")].sort((a, b) => (Number(a.startTime || 0) - Number(b.startTime || 0)));
-    }, [rhTaskRuns, comfyTaskRuns, forgeTaskRuns]);
+        return [...tagRuns(rhTaskRuns, "runninghub"), ...tagRuns(comfyTaskRuns, "comfy"), ...tagRuns(forgeTaskRuns, "forge"), ...tagRuns(bananaTaskRuns, "banana")].sort((a, b) => (Number(a.startTime || 0) - Number(b.startTime || 0)));
+    }, [rhTaskRuns, comfyTaskRuns, forgeTaskRuns, bananaTaskRuns]);
     const registerTaskActions = useCallback((platform, handlers) => {
         taskActionRefs.current[platform] = handlers || {};
         return () => {
@@ -1535,6 +1048,7 @@ export function RunninghubShell({ isActiveProduct = true }) {
     const registerRunningHubTaskActions = useCallback((handlers) => registerTaskActions("runninghub", handlers), [registerTaskActions]);
     const registerComfyTaskActions = useCallback((handlers) => registerTaskActions("comfy", handlers), [registerTaskActions]);
     const registerForgeTaskActions = useCallback((handlers) => registerTaskActions("forge", handlers), [registerTaskActions]);
+    const registerBananaTaskActions = useCallback((handlers) => registerTaskActions("banana", handlers), [registerTaskActions]);
     const handleDismissSharedRun = useCallback((platform, runId) => {
         taskActionRefs.current[platform]?.dismiss?.(runId);
     }, []);
@@ -1581,13 +1095,6 @@ export function RunninghubShell({ isActiveProduct = true }) {
             return next;
         });
     }, [pushStatus, setDuckDecodeEnabled]);
-
-    const handleOpenResultCacheFolder = useCallback(async () => {
-        const now = Date.now();
-        if (now - openResultCacheGateRef.current < 900) return;
-        openResultCacheGateRef.current = now;
-        await openResultCacheFolderWithStatus(pushStatus);
-    }, [pushStatus]);
 
     const refreshSoundFileOptions = useCallback(async () => {
         const files = await listSoundFiles();
@@ -1651,7 +1158,7 @@ export function RunninghubShell({ isActiveProduct = true }) {
                 refreshRhSavedAppNamesFromApi(key, appsForRefresh, setSavedApps).then((r) => {
                     pushStatus(`封面获取完成：${r.coverOk || 0} 张，应用 ${r.ok} 个${r.fail ? `，${r.fail} 个解析失败` : ""}`, r.fail ? 5500 : 4000);
                 }).catch((e) => {
-                    const msg = e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
+                    const msg = rhShellErrorMessage(e);
                     pushStatus(`获取应用封面失败：${msg}`, 6000);
                 });
             }
@@ -1687,7 +1194,7 @@ export function RunninghubShell({ isActiveProduct = true }) {
             setAccountStatus({ ...status, loading: false });
             setAccountStatusCacheUntil(Date.now() + ACCOUNT_CACHE_MS);
         }).catch((e) => {
-            setAccountStatus((prev) => ({ ...(prev || {}), error: String(e?.message || e), loading: false }));
+            setAccountStatus((prev) => ({ ...(prev || {}), error: rhShellErrorMessage(e), loading: false }));
         });
     }, [apiKey, accountStatusCacheUntil]);
 
@@ -1696,10 +1203,16 @@ export function RunninghubShell({ isActiveProduct = true }) {
     }, [apiKey, fetchAccountStatus]);
 
     const toggleSettings = useCallback(() => {
+        requestCloseRhAppDropdowns();
         setCurrentPage((p) => (p === "home" ? "settings" : "home"));
     }, []);
 
     const isHome = currentPage === "home";
+    const themeModeClass = themeMode === "dark" ? "rh-theme-dark" : "rh-theme-light";
+
+    useEffect(() => {
+        requestCloseRhAppDropdowns();
+    }, [activeProductMode, currentPage]);
 
     const orderedIds = (() => {
         const ids = Array.isArray(cardOrder) ? cardOrder : DEFAULT_RH_SETTINGS_CARD_ORDER;
@@ -1722,7 +1235,7 @@ export function RunninghubShell({ isActiveProduct = true }) {
 
     return (
         <div
-            className="rh-shell-container rh-custom-text-color"
+            className={`rh-shell-container rh-custom-text-color ${themeModeClass}`}
             style={{
                 display: "flex",
                 flexDirection: "column",
@@ -1736,7 +1249,6 @@ export function RunninghubShell({ isActiveProduct = true }) {
                 bottom: 0,
                 "--topbar-height": "46px",
                 "--xlrh-input-font-size": `${inputFontSize}px`,
-                "--xlrh-panel-cursor": 'url("icons/cursor.png") 10 12, auto',
             }}
         >
             {showCustomBackground && (
@@ -1752,6 +1264,7 @@ export function RunninghubShell({ isActiveProduct = true }) {
                     />
                 </div>
             )}
+            <ProductModeButton activeProduct={activeProductMode} onChange={changeProduct} />
             <div style={{ display: activeProductMode === "comfy" ? "flex" : "none", flex: 1, minHeight: 0, flexDirection: "column" }}>
                 <ComfyShell
                     activeProduct={activeProductMode}
@@ -1760,6 +1273,8 @@ export function RunninghubShell({ isActiveProduct = true }) {
                         pushStatus,
                         rhAutoReturnEnabled,
                         setRhAutoReturnEnabled,
+                        concurrentReturnGroupEnabled,
+                        setConcurrentReturnGroupEnabled,
                         uploadLongEdgeMax,
                         setUploadLongEdgeMax,
                         uploadImageFormat,
@@ -1780,6 +1295,8 @@ export function RunninghubShell({ isActiveProduct = true }) {
                         setCustomBgOpacity,
                         customBgBlur,
                         setCustomBgBlur,
+                        themeMode,
+                        setThemeMode,
                         textColor,
                         setTextColor,
                         soundFileOptions,
@@ -1787,6 +1304,8 @@ export function RunninghubShell({ isActiveProduct = true }) {
                         setSuccessSoundFile,
                         failSoundFile,
                         setFailSoundFile,
+                        soundMuted,
+                        setSoundMuted,
                         onOpenSoundFolder: handleOpenSoundFolder,
                         onRefreshSoundFiles: refreshSoundFileOptions,
                     }}
@@ -1805,6 +1324,8 @@ export function RunninghubShell({ isActiveProduct = true }) {
                         pushStatus,
                         rhAutoReturnEnabled,
                         setRhAutoReturnEnabled,
+                        concurrentReturnGroupEnabled,
+                        setConcurrentReturnGroupEnabled,
                         uploadLongEdgeMax,
                         setUploadLongEdgeMax,
                         uploadImageFormat,
@@ -1825,6 +1346,8 @@ export function RunninghubShell({ isActiveProduct = true }) {
                         setCustomBgOpacity,
                         customBgBlur,
                         setCustomBgBlur,
+                        themeMode,
+                        setThemeMode,
                         textColor,
                         setTextColor,
                         soundFileOptions,
@@ -1832,6 +1355,8 @@ export function RunninghubShell({ isActiveProduct = true }) {
                         setSuccessSoundFile,
                         failSoundFile,
                         setFailSoundFile,
+                        soundMuted,
+                        setSoundMuted,
                         onOpenSoundFolder: handleOpenSoundFolder,
                         onRefreshSoundFiles: refreshSoundFileOptions,
                     }}
@@ -1842,11 +1367,63 @@ export function RunninghubShell({ isActiveProduct = true }) {
                     onRegisterTaskActions={registerForgeTaskActions}
                 />
             </div>
+            <div className="banana-product-panel" style={{ display: activeProductMode === "banana" ? "flex" : "none", flex: "0 0 auto", minHeight: "100%", flexDirection: "column" }}>
+                <BananaShell
+                    activeProduct={activeProductMode}
+                    onChangeProduct={changeProduct}
+                    sharedSettings={{
+                        pushStatus,
+                        rhAutoReturnEnabled,
+                        setRhAutoReturnEnabled,
+                        concurrentReturnGroupEnabled,
+                        setConcurrentReturnGroupEnabled,
+                        uploadLongEdgeMax,
+                        setUploadLongEdgeMax,
+                        uploadImageFormat,
+                        setUploadImageFormat,
+                        themeColorStart,
+                        setThemeColorStart,
+                        themeColorEnd,
+                        setThemeColorEnd,
+                        opacity,
+                        setOpacity,
+                        blur,
+                        setBlur,
+                        customBgEnabled,
+                        setCustomBgEnabled,
+                        customBgImage,
+                        setCustomBgImage,
+                        customBgOpacity,
+                        setCustomBgOpacity,
+                        customBgBlur,
+                        setCustomBgBlur,
+                        themeMode,
+                        setThemeMode,
+                        textColor,
+                        setTextColor,
+                        soundFileOptions,
+                        successSoundFile,
+                        setSuccessSoundFile,
+                        failSoundFile,
+                        setFailSoundFile,
+                        soundMuted,
+                        setSoundMuted,
+                        onOpenSoundFolder: handleOpenSoundFolder,
+                        onRefreshSoundFiles: refreshSoundFileOptions,
+                    }}
+                    onRunsChange={setBananaTaskRuns}
+                    sharedTaskRuns={sharedTaskRuns}
+                    onDismissSharedRun={handleDismissSharedRun}
+                    onRetrySharedPlace={handleRetrySharedPlace}
+                    onRegisterTaskActions={registerBananaTaskActions}
+                />
+            </div>
             <div style={{ display: activeProductMode === "runninghub" ? "flex" : "none", flex: 1, minHeight: 0, flexDirection: "column" }}>
             <RhTopBar
                 isSettingsOpen={!isHome}
                 onToggleView={toggleSettings}
                 onRefresh={() => fetchAccountStatus(true)}
+                onRefreshDefinition={() => setRhDefinitionRefreshTick((tick) => tick + 1)}
                 onRefreshApps={() => {
                     const key = apiKey || "";
                     const validSavedApps = Array.isArray(savedApps) ? savedApps : [];
@@ -1862,7 +1439,7 @@ export function RunninghubShell({ isActiveProduct = true }) {
                         const restoredText = restoredCount > 0 ? `已恢复 ${restoredCount} 个默认应用；` : "";
                         pushStatus(`${restoredText}封面获取完成：${r.coverOk || 0} 张，应用 ${r.ok} 个${r.fail ? `，${r.fail} 个失败` : ""}`, r.fail ? 5500 : 4000);
                     }).catch((e) => {
-                        const msg = e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
+                        const msg = rhShellErrorMessage(e);
                         pushStatus(`获取封面失败：${msg}`, 6000);
                         throw e;
                     });
@@ -1872,8 +1449,6 @@ export function RunninghubShell({ isActiveProduct = true }) {
                 accountStatus={accountStatus}
                 currentKey={apiKey}
                 isActiveProduct={isActiveProduct}
-                activeProduct={activeProductMode}
-                onChangeProduct={changeProduct}
                 onPopupOpenFetchAccount={() => fetchAccountStatus(false)}
             />
             <div
@@ -1894,13 +1469,14 @@ export function RunninghubShell({ isActiveProduct = true }) {
                     onOpenSettings={() => setCurrentPage("settings")}
                     currentKey={apiKey}
                     apiKeyMode={apiKeyMode}
-                    isActiveProduct={isActiveProduct && activeProductMode === "runninghub"}
+                    isActiveProduct={isActiveProduct && activeProductMode === "runninghub" && isHome}
                     duckDecodeEnabled={duckDecodeEnabled}
                     autoReturnEnabled={rhAutoReturnEnabled}
                     uploadLongEdgeMax={uploadLongEdgeMax}
                     uploadImageFormat={uploadImageFormat}
                     successSoundFile={successSoundFile}
                     failSoundFile={failSoundFile}
+                    definitionRefreshTick={rhDefinitionRefreshTick}
                     onRefreshAccount={() => fetchAccountStatus(true)}
                     onRunsChange={setRhTaskRuns}
                     sharedTaskRuns={sharedTaskRuns}
@@ -1950,8 +1526,12 @@ export function RunninghubShell({ isActiveProduct = true }) {
                     setCustomBgOpacity={setCustomBgOpacity}
                     customBgBlur={customBgBlur}
                     setCustomBgBlur={setCustomBgBlur}
+                    themeMode={themeMode}
+                    setThemeMode={setThemeMode}
                     rhAutoReturnEnabled={rhAutoReturnEnabled}
                     setRhAutoReturnEnabled={setRhAutoReturnEnabled}
+                    concurrentReturnGroupEnabled={concurrentReturnGroupEnabled}
+                    setConcurrentReturnGroupEnabled={setConcurrentReturnGroupEnabled}
                     uploadLongEdgeMax={uploadLongEdgeMax}
                     setUploadLongEdgeMax={setUploadLongEdgeMax}
                     uploadImageFormat={uploadImageFormat}
@@ -1961,6 +1541,8 @@ export function RunninghubShell({ isActiveProduct = true }) {
                     setSuccessSoundFile={setSuccessSoundFile}
                     failSoundFile={failSoundFile}
                     setFailSoundFile={setFailSoundFile}
+                    soundMuted={soundMuted}
+                    setSoundMuted={setSoundMuted}
                     onOpenSoundFolder={handleOpenSoundFolder}
                     onRefreshSoundFiles={refreshSoundFileOptions}
                     textColor={textColor}

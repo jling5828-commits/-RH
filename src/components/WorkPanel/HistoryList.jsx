@@ -194,7 +194,8 @@ function HistoryToolbar({ keyword, onKeyword, hasRecords, exportOpen, exportAnch
                 {hasRecords ? (
                     <div className="xlrh-ledger-export-wrap">
                         <button ref={exportButtonRef} type="button" className="xlrh-ledger-btn" title="导出" onClick={onToggleExport}>
-                            导出 ▾
+                            <span>导出</span>
+                            <span className={"xlrh-ledger-export-caret" + (exportOpen ? " open" : "")}>▼</span>
                         </button>
                         {exportOpen ? (
                             <HistoryExportMenu
@@ -387,7 +388,7 @@ export const HistorySection = ({ type, defaultOpen = false, onSelect, onFillRepl
                 }}
             >
                 <span className="xlrh-ledger-fold-title">历史{count > 0 ? <span>({count})</span> : null}</span>
-                <span className="xlrh-ledger-fold-arrow">▸</span>
+                <span className="xlrh-ledger-fold-arrow">▼</span>
             </div>
             {open ? (
                 <div className="xlrh-ledger-fold-body">

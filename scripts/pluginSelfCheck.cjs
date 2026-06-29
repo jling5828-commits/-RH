@@ -19,9 +19,18 @@ const REQUIRED_PLUGIN_FILES = [
     "icons/duck_toggle.png",
     "icons/icon.png",
     "icons/icon@2x.png",
+    "icons/icon_24.png",
+    "icons/icon_24@2x.png",
     "voices/小梁小梁图修好啦.mp3",
     "voices/小梁小梁图没修好.mp3",
 ];
+
+const REQUIRED_PNG_SIZES = {
+    "icons/icon.png": [23, 23],
+    "icons/icon@2x.png": [46, 46],
+    "icons/icon_24.png": [23, 23],
+    "icons/icon_24@2x.png": [46, 46],
+};
 
 const codePoints = (...codes) => String.fromCodePoint(...codes);
 const oldWord = (...codes) => ({ label: "old marker", value: codePoints(...codes) });
@@ -32,6 +41,21 @@ const OLD_BRAND_PATTERNS = [
     oldWord(0x60E0, 0x7ED8),
     oldWord(0x62, 0x61, 0x6E, 0x61, 0x6E, 0x61),
 ];
+
+const BANANA_FEATURE_FILES = new Set([
+    "src/components/ProductModeButton.jsx",
+    "src/comfy/ComfyShell.jsx",
+    "src/forge/ForgeShell.jsx",
+    "src/hooks/usePersistedState.js",
+    "src/runninghub/ui/RhWorkPanel.jsx",
+    "src/runninghub/ui/RunninghubShell.jsx",
+    "src/utils/dropdownFocusEffect.js",
+    "src/utils/resultFolderTokens.js",
+]);
+
+function isAllowedBananaFeatureMarker(fileRel, marker) {
+    return marker.value === "banana" && (fileRel.startsWith("src/banana/") || BANANA_FEATURE_FILES.has(fileRel));
+}
 
 const MOJIBAKE_FRAGMENTS = [
     codePoints(0x704F, 0x5FDD, 0x6CF5),
@@ -126,7 +150,7 @@ function checkTextFiles() {
         }
 
         for (const marker of OLD_BRAND_PATTERNS) {
-            if (text.includes(marker.value)) {
+            if (text.includes(marker.value) && !isAllowedBananaFeatureMarker(fileRel, marker)) {
                 const line = firstLine(text, (s) => s.includes(marker.value));
                 reportError(`${fileRel}:${line || 1} contains old platform/author marker`);
             }
@@ -166,6 +190,7 @@ function checkPluginAssets() {
     for (const file of REQUIRED_PLUGIN_FILES) {
         if (!fs.existsSync(path.join(ROOT, "plugin", file))) reportError(`plugin/${file} is missing`);
     }
+    checkPngSizes("plugin");
 }
 
 function checkDist() {
@@ -180,6 +205,27 @@ function checkDist() {
     }
     for (const file of REQUIRED_PLUGIN_FILES) {
         if (!fs.existsSync(path.join(dist, file))) reportError(`dist/${file} is missing`);
+    }
+    checkPngSizes("dist");
+}
+
+function checkPngSizes(baseDir) {
+    for (const [file, [expectedWidth, expectedHeight]] of Object.entries(REQUIRED_PNG_SIZES)) {
+        const fullPath = path.join(ROOT, baseDir, file);
+        if (!fs.existsSync(fullPath)) continue;
+        const buffer = fs.readFileSync(fullPath);
+        const validPng = buffer.length >= 24
+            && buffer.toString("ascii", 1, 4) === "PNG"
+            && buffer.readUInt32BE(12) === 0x49484452;
+        if (!validPng) {
+            reportError(`${baseDir}/${file} is not a valid PNG`);
+            continue;
+        }
+        const width = buffer.readUInt32BE(16);
+        const height = buffer.readUInt32BE(20);
+        if (width !== expectedWidth || height !== expectedHeight) {
+            reportError(`${baseDir}/${file} must be ${expectedWidth}x${expectedHeight}, got ${width}x${height}`);
+        }
     }
 }
 

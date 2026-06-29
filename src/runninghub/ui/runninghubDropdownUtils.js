@@ -1,6 +1,13 @@
 import { useLayoutEffect, useState } from "react";
 
 export const RH_APP_MENU_MAX_HEIGHT_PX = 440;
+export const RH_CLOSE_APP_DROPDOWNS_EVENT = "xlrh-close-rh-app-dropdowns";
+export const RH_DROPDOWN_OUTSIDE_EVENTS = ["pointerdown", "mousedown", "click"];
+
+export function requestCloseRhAppDropdowns() {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new Event(RH_CLOSE_APP_DROPDOWNS_EVENT));
+}
 
 const GAP = 8;
 const MIN_WIDTH = 120;

@@ -189,6 +189,7 @@ export async function applySymmetricEdgeFeatherMask(photoshop, {
     layer,
     bounds,
     featherPx,
+    forceMask = false,
     logTag = "[PlaceMask]",
 }) {
     const imaging = photoshop?.imaging;
@@ -198,10 +199,17 @@ export async function applySymmetricEdgeFeatherMask(photoshop, {
     const rect = readRectPixels(bounds);
     const maxFeather = Math.max(0, Math.floor(Math.min(rect.width, rect.height) / 2) - 1);
     const feather = Math.min(Math.max(0, Math.floor(Number(featherPx) || 0)), maxFeather);
-    if (feather <= 0) return {};
+    if (feather <= 0 && !forceMask) return {};
 
     const doc = docPixelSize(activeDoc);
-    const geometry = edgeReach({ rect, doc, featherPx: feather });
+    const geometry = feather > 0
+        ? edgeReach({ rect, doc, featherPx: feather })
+        : {
+            maskWidth: rect.width,
+            maskHeight: rect.height,
+            expand: { left: 0, top: 0, right: 0, bottom: 0 },
+            fade: { left: 0, right: 0, top: 0, bottom: 0 },
+        };
     const maskBytes = buildMaskBytes(geometry.maskWidth, geometry.maskHeight, geometry.fade);
     let imageData = null;
     try {
@@ -244,6 +252,7 @@ export function isFullCanvasSelBounds(selBounds, docW, docH, tol = 2) {
 export function parsePlaceEdgeOpts(raw) {
     const options = raw && typeof raw === "object" ? raw : {};
     return {
+        placeCreateMask: options.placeCreateMask === true,
         placeEdgeFeatherAuto: options.placeEdgeFeatherAuto === true,
         placeEdgeFeatherSubcanvasOnly: true,
         placeKeepSelection: options.useSavedPlaceContext === true ? false : options.placeKeepSelection !== false,

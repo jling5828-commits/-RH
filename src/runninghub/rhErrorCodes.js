@@ -47,6 +47,8 @@ const CODE_MESSAGES = new Map([
 ]);
 
 const MESSAGE_RULES = [
+    [/Network request failed|Failed to fetch|Load failed|HTTP 0|RH_NETWORK_FAILED|TypeError:\s*fetch/i, "RunningHub 网络请求失败：请检查网络/VPN/代理/防火墙或稍后重试"],
+    [/RH_REQUEST_TIMEOUT/i, "RunningHub 请求超时：请检查网络/VPN/代理/防火墙后重试"],
     [/暂无权限调用该内容|无权限调用该内容|无权调用|联系发布者开通|no permission|permission denied|unauthori[sz]ed|forbidden/i, "当前 API Key 无权调用该 AI 应用：请联系发布者开通，或更换已授权的应用/Key"],
     [/TASK_CREATE_FAILED_BY_NOT_ENOUGH_POWER_VALUE/i, "RH币/算力不足：平台拒绝创建任务；若当前是企业共享 Key，请核对 Key 权限和该应用是否绑定企业扣费"],
     [/TASK_CREATE_FAILED_BY_NOT_ENOUGH_WALLET/i, "账户余额不足：请充值后重试"],
@@ -142,6 +144,7 @@ export function formatRhError(opts = {}) {
     if (code != null && CODE_MESSAGES.has(code)) return CODE_MESSAGES.get(code);
 
     const platformText = text(opts.message) || text(opts.errorMessage) || text(opts.errorCode);
+    if (/^RunningHub\s+.*(?:网络请求失败|请求超时)：/.test(platformText)) return platformText;
     const ruleMessage = messageFromRules(platformText) || messageFromRules(opts.errorCode);
     if (ruleMessage) return ruleMessage;
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { playSound, playSoundFail } from "../../utils/playSound.js";
+import { readFailSoundFile, readSuccessSoundFile } from "../../utils/sharedInteractionSettings.js";
 import { reportGenerateOutcome } from "../../utils/analytics.js";
 import {
     XLRH_RUN_DONE_RETAIN_MS,
@@ -10,6 +11,7 @@ import {
     loadRecoveredRhRuns,
     makeRhBatchPlans,
     makeRhRunPlan,
+    pruneCompletedRhRuns,
     saveRecoveredRhRuns,
     withDisplayImageCount,
 } from "./xlrhRunQueueRecords.js";
@@ -99,6 +101,13 @@ export function useRhParallelRunner({ pushStatus, pushInvocation, runExecutor, s
     }, [activeRuns]);
 
     useEffect(() => {
+        const prune = () => setActiveRuns((prev) => pruneCompletedRhRuns(prev));
+        prune();
+        const timer = setInterval(prune, 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    useEffect(() => {
         if (recoveryToastShownRef.current) return;
         const restored = activeRuns.filter((run) => run.recovered).length;
         if (restored <= 0) return;
@@ -119,8 +128,8 @@ export function useRhParallelRunner({ pushStatus, pushInvocation, runExecutor, s
                 completedAt: Date.now(),
             });
 
-            if (status === "success") playSound({ fileName: successSoundFile });
-            if (status === "error" || status === "warning") playSoundFail({ fileName: failSoundFile });
+            if (status === "success") playSound({ fileName: readSuccessSoundFile(successSoundFile) });
+            if (status === "error" || status === "warning") playSoundFail({ fileName: readFailSoundFile(failSoundFile) });
 
             const toast = toastForRhStatus(status, resultDetail);
             pushStatus(toast.message, toast.duration);
@@ -153,11 +162,11 @@ export function useRhParallelRunner({ pushStatus, pushInvocation, runExecutor, s
                 status: cancelled ? "cancelled" : "error",
                 resultDetail,
                 elapsedSec,
-                completedAt: cancelled ? undefined : Date.now(),
+                completedAt: Date.now(),
             });
 
             if (!cancelled) {
-                playSoundFail({ fileName: failSoundFile });
+                playSoundFail({ fileName: readFailSoundFile(failSoundFile) });
                 pushStatus(message, 6000);
             }
             reportGenerateOutcome(rhReportPayload({
@@ -216,7 +225,7 @@ export function useRhParallelRunner({ pushStatus, pushInvocation, runExecutor, s
                 } catch (_) {
                     // Abort is best-effort.
                 }
-                return runs.map((run) => (run.id === cancelTargetId ? { ...run, status: "cancelled" } : run));
+                return runs.map((run) => (run.id === cancelTargetId ? { ...run, status: "cancelled", progress: 100, stageText: "已取消", completedAt: Date.now() } : run));
             });
             pushStatus("已取消任务", 3000);
         }

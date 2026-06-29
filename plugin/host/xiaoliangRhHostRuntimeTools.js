@@ -30,10 +30,6 @@ function nodeFs() {
     return nativeRequire("fs");
 }
 
-function childProcess() {
-    return nativeRequire("child_process");
-}
-
 function fileUrlToNativePath(value) {
     const raw = String(value || "").trim();
     if (!/^file:\/\//i.test(raw)) return raw;
@@ -43,44 +39,32 @@ function fileUrlToNativePath(value) {
     return path.replace(/\//g, "\\");
 }
 
-function startExplorer(nativePath, prefixArgs = []) {
-    const cp = childProcess();
-    if (!cp || (typeof cp.spawn !== "function" && typeof cp.execFile !== "function")) {
-        return Promise.reject(new Error("child_process unavailable"));
+function normalizeNativePath(value) {
+    let path = fileUrlToNativePath(value).trim().replace(/\//g, "\\");
+    if (!path) return "";
+    if (/^[A-Za-z]:/.test(path)) {
+        const drive = path.slice(0, 2);
+        const rest = path.slice(2).replace(/\\+/g, "\\");
+        return `${drive}${rest.startsWith("\\") ? rest : `\\${rest}`}`;
     }
-    const args = [...prefixArgs, String(nativePath || "")];
-    if (typeof cp.spawn === "function") {
-        return new Promise((resolve, reject) => {
-            try {
-                const child = cp.spawn("explorer.exe", args, { detached: true, stdio: "ignore", windowsHide: true });
-                child.once?.("error", reject);
-                child.unref?.();
-                setTimeout(() => resolve(true), 30);
-            } catch (error) {
-                reject(error);
-            }
-        });
-    }
-    return new Promise((resolve, reject) => {
-        try {
-            cp.execFile("explorer.exe", args, { windowsHide: true }, (error) => (error ? reject(error) : resolve(true)));
-        } catch (error) {
-            reject(error);
-        }
-    });
+    if (/^\\\\/.test(path)) return `\\\\${path.slice(2).replace(/\\+/g, "\\")}`;
+    return path.replace(/\\+/g, "\\");
 }
 
-async function openViaCmdFile(nativePath) {
-    const dataFolder = await localFs.getDataFolder();
-    const file = await dataFolder.createFile("open-folder.cmd", { overwrite: true });
-    const safePath = String(nativePath || "").replace(/"/g, '""');
-    await file.write(`@echo off\r\nstart "" explorer.exe "${safePath}"\r\nexit /b 0\r\n`, { format: uxpFormats.utf8 });
-    await uxpShell.openPath(file.nativePath);
+function assertUxpOpenOk(result) {
+    if (!result) return;
+    throw new Error(String(result));
+}
+
+async function openViaUxpPath(nativePath) {
+    assertUxpOpenOk(await uxpShell.openPath(normalizeNativePath(nativePath), "小梁RH正在打开插件文件夹"));
 }
 
 export async function openNativeFolderInHost(nativePath) {
-    const targetPath = String(nativePath || "").trim();
-    if (!targetPath) throw new Error("folder path unavailable");
+    const rawPath = normalizeNativePath(nativePath);
+    if (!rawPath) throw new Error("folder path unavailable");
+    const targetPath = ensureNativeFolder(fileExists(rawPath) ? parentNativePath(rawPath) : rawPath) || rawPath;
+    if (!folderExists(targetPath)) console.warn("[XiaoLiangRH][open-cache] folder existence not confirmed", targetPath);
     const attempts = [];
     const tryOpen = async (name, action) => {
         try {
@@ -94,11 +78,7 @@ export async function openNativeFolderInHost(nativePath) {
     };
 
     console.log("[XiaoLiangRH][open-cache] host open start", targetPath);
-    let opened = await tryOpen("explorer", () => startExplorer(targetPath));
-    if (opened) return opened;
-    opened = await tryOpen("explorer-select", () => startExplorer(targetPath, ["/select,"]));
-    if (opened) return opened;
-    opened = await tryOpen("cmd-launcher", () => openViaCmdFile(targetPath));
+    const opened = await tryOpen("uxp-openPath", () => openViaUxpPath(targetPath));
     if (opened) return opened;
     throw new Error(`open folder failed: ${attempts.join(" / ")}`);
 }
@@ -129,33 +109,60 @@ function knownCacheNativePaths() {
 }
 
 function ensureNativeFolder(nativePath) {
-    if (!nativePath) return "";
+    const targetPath = normalizeNativePath(nativePath);
+    if (!targetPath) return "";
     const fsNode = nodeFs();
-    if (!fsNode) return nativePath;
+    if (!fsNode) return targetPath;
     try {
-        if (!fsNode.existsSync(nativePath)) fsNode.mkdirSync(nativePath, { recursive: true });
-        return nativePath;
+        if (typeof fsNode.existsSync === "function" && typeof fsNode.mkdirSync === "function") {
+            if (!fsNode.existsSync(targetPath)) fsNode.mkdirSync(targetPath, { recursive: true });
+            return targetPath;
+        }
+        if (typeof fsNode.lstatSync === "function") {
+            const stat = fsNode.lstatSync(targetPath);
+            if (!stat || typeof stat.isDirectory !== "function" || stat.isDirectory()) return targetPath;
+        }
     } catch (_) {
-        return "";
+        // UXP's fs API is not identical to Node's fs; keep the path and let shell.openPath report the real failure.
     }
+    return targetPath;
 }
 
 function fileExists(nativePath) {
+    const targetPath = normalizeNativePath(nativePath);
     const fsNode = nodeFs();
     try {
-        return !!nativePath && fsNode?.existsSync(nativePath) && fsNode.statSync(nativePath).isFile();
+        if (!targetPath || !fsNode) return false;
+        if (typeof fsNode.existsSync === "function" && typeof fsNode.statSync === "function") {
+            return fsNode.existsSync(targetPath) && fsNode.statSync(targetPath).isFile();
+        }
+        if (typeof fsNode.lstatSync === "function") {
+            const stat = fsNode.lstatSync(targetPath);
+            return !!stat && typeof stat.isFile === "function" && stat.isFile();
+        }
     } catch (_) {
-        return false;
+        // Keep folder paths flowing to openPath.
     }
+    return false;
 }
 
 function folderExists(nativePath) {
+    const targetPath = normalizeNativePath(nativePath);
     const fsNode = nodeFs();
+    if (!fsNode) return !!targetPath;
     try {
-        return !!nativePath && fsNode?.existsSync(nativePath) && fsNode.statSync(nativePath).isDirectory();
+        if (!targetPath) return false;
+        if (typeof fsNode.existsSync === "function" && typeof fsNode.statSync === "function") {
+            return fsNode.existsSync(targetPath) && fsNode.statSync(targetPath).isDirectory();
+        }
+        if (typeof fsNode.lstatSync === "function") {
+            const stat = fsNode.lstatSync(targetPath);
+            return !!stat && (typeof stat.isDirectory !== "function" || stat.isDirectory());
+        }
     } catch (_) {
-        return false;
+        // Do not block shell.openPath just because this UXP fs flavor cannot stat native paths.
     }
+    return true;
 }
 
 function chooseCacheNativePath(dataNativePath, cacheNativePath) {
@@ -180,8 +187,8 @@ function chooseCacheNativePath(dataNativePath, cacheNativePath) {
 }
 
 function joinNativePath(rootPath, childName) {
-    const root = String(rootPath || "").replace(/[\\/]+$/, "");
-    return root ? `${root}\\${childName}` : "";
+    const root = normalizeNativePath(rootPath).replace(/[\\/]+$/, "");
+    return root ? normalizeNativePath(`${root}\\${childName}`) : "";
 }
 
 function parentNativePath(nativePath) {
@@ -199,12 +206,24 @@ function pluginRootFromCandidate(nativePath) {
     }
     if (!fsNode) return parentNativePath(cursor) || cursor;
     for (let depth = 0; depth < 6 && cursor; depth += 1) {
-        if (fileExists(joinNativePath(cursor, "manifest.json"))) return ensureNativeFolder(cursor);
+        if (manifestMatchesPlugin(joinNativePath(cursor, "manifest.json"))) return ensureNativeFolder(cursor);
         const next = parentNativePath(cursor);
         if (!next || next === cursor) break;
         cursor = next;
     }
     return "";
+}
+
+function manifestMatchesPlugin(manifestPath) {
+    const fsNode = nodeFs();
+    if (!fileExists(manifestPath)) return false;
+    if (!fsNode) return true;
+    try {
+        const manifest = JSON.parse(fsNode.readFileSync(manifestPath, "utf8"));
+        return !manifest?.id || manifest.id === MANIFEST_ID;
+    } catch (_) {
+        return false;
+    }
 }
 
 function runtimePluginNativeRoot(runtimeHint = "") {
@@ -230,10 +249,14 @@ function runtimePluginNativeRoot(runtimeHint = "") {
 }
 
 async function pluginNativeRoot(runtimeHint = "") {
-    const pluginFolder = await localFs.getPluginFolder();
     const runtimeRoot = runtimePluginNativeRoot(runtimeHint);
+    let pluginFolder = null;
+    try {
+        pluginFolder = await localFs.getPluginFolder();
+    } catch (_) {}
     if (runtimeRoot) return { pluginFolder, nativePath: runtimeRoot };
-    const direct = pluginRootFromCandidate(pluginFolder.nativePath || "") || ensureNativeFolder(pluginFolder.nativePath || "");
+    if (!pluginFolder) return { pluginFolder: null, nativePath: "" };
+    const direct = pluginRootFromCandidate(pluginFolder.nativePath || "");
     if (direct) return { pluginFolder, nativePath: direct };
     try {
         const manifest = await pluginFolder.getEntry("manifest.json");
@@ -267,6 +290,24 @@ async function getOrCreateChildFolder(parentFolder, folderName) {
     }
 }
 
+function entryNativePath(entry) {
+    return normalizeNativePath(entry?.nativePath || "");
+}
+
+async function openFolderEntryViaUxp(folder, label) {
+    if (!folder || folder.isFile) throw new Error(`${label || "folder"} entry unavailable`);
+    const nativePath = entryNativePath(folder);
+    if (!nativePath) throw new Error(`${label || "folder"} nativePath unavailable`);
+    assertUxpOpenOk(await uxpShell.openPath(nativePath, "小梁RH正在打开插件文件夹"));
+    return { ok: true, opener: "uxp-openPath-entry", nativePath };
+}
+
+async function pluginChildFolderEntry(folderName) {
+    const pluginFolder = await localFs.getPluginFolder();
+    const folder = await getOrCreateChildFolder(pluginFolder, folderName);
+    return { pluginFolder, folder };
+}
+
 async function deleteFolderContents(folder) {
     const entries = await folder.getEntries();
     let files = 0;
@@ -297,42 +338,56 @@ export async function clearResultImageCacheInHost() {
 }
 
 export async function getResultImageCacheInfoInHost() {
-    const dataFolder = await localFs.getDataFolder();
-    const cacheFolder = await getOrCreateChildFolder(dataFolder, CACHE_FOLDER_NAME);
-    const dataNativePath = dataFolder.nativePath || "";
+    let dataNativePath = "";
+    let cacheNativePath = "";
+    let cacheName = CACHE_FOLDER_NAME;
+    try {
+        const dataFolder = await localFs.getDataFolder();
+        const cacheFolder = await getOrCreateChildFolder(dataFolder, CACHE_FOLDER_NAME);
+        dataNativePath = dataFolder.nativePath || "";
+        cacheNativePath = cacheFolder.nativePath || "";
+        cacheName = cacheFolder.name || CACHE_FOLDER_NAME;
+    } catch (_) {}
     return {
         ok: true,
-        name: cacheFolder.name || CACHE_FOLDER_NAME,
-        nativePath: chooseCacheNativePath(dataNativePath, cacheFolder.nativePath || ""),
+        name: cacheName,
+        nativePath: chooseCacheNativePath(dataNativePath, cacheNativePath),
         dataNativePath,
     };
 }
 
 export async function openResultImageCacheFolderInHost() {
-    const info = await getResultImageCacheInfoInHost();
-    if (!info.nativePath) throw new Error("image_cache path unavailable");
-    return { ...info, ...(await openNativeFolderInHost(info.nativePath)) };
+    const dataFolder = await localFs.getDataFolder();
+    const cacheFolder = await getOrCreateChildFolder(dataFolder, CACHE_FOLDER_NAME);
+    const opened = await openFolderEntryViaUxp(cacheFolder, CACHE_FOLDER_NAME);
+    return {
+        ok: true,
+        name: cacheFolder.name || CACHE_FOLDER_NAME,
+        dataNativePath: entryNativePath(dataFolder),
+        ...opened,
+    };
 }
 
 export async function openForgePresetFolderInHost(runtimeHint = "") {
-    const info = await pluginChildNativeFolder(FORGE_PRESET_FOLDER_NAME, runtimeHint);
+    const dataFolder = await localFs.getDataFolder();
+    const folder = await getOrCreateChildFolder(dataFolder, FORGE_PRESET_FOLDER_NAME);
+    const opened = await openFolderEntryViaUxp(folder, FORGE_PRESET_FOLDER_NAME);
     return {
         ok: true,
-        name: info.name,
-        nativePath: info.nativePath,
-        pluginNativePath: info.pluginNativePath,
-        ...(await openNativeFolderInHost(info.nativePath)),
+        name: folder.name || FORGE_PRESET_FOLDER_NAME,
+        dataNativePath: entryNativePath(dataFolder),
+        ...opened,
     };
 }
 
 export async function openSoundFolderInHost(runtimeHint = "") {
-    const info = await pluginChildNativeFolder(VOICE_FOLDER_NAME, runtimeHint);
+    const { pluginFolder, folder } = await pluginChildFolderEntry(VOICE_FOLDER_NAME);
+    const opened = await openFolderEntryViaUxp(folder, VOICE_FOLDER_NAME);
     return {
         ok: true,
-        name: info.name,
-        nativePath: info.nativePath,
-        pluginNativePath: info.pluginNativePath,
-        ...(await openNativeFolderInHost(info.nativePath)),
+        name: folder.name || VOICE_FOLDER_NAME,
+        pluginNativePath: entryNativePath(pluginFolder),
+        ...opened,
     };
 }
 

@@ -112,7 +112,12 @@ async function getDataFolderToken() {
 }
 
 async function getSessionFolderToken(getFolder) {
-    return { token: await fs.createSessionToken(await getFolder()) };
+    const folder = await getFolder();
+    return {
+        token: await fs.createSessionToken(folder),
+        name: folder.name || "",
+        nativePath: folder.nativePath || "",
+    };
 }
 
 async function readPersistentEntry(token) {
@@ -122,7 +127,7 @@ async function readPersistentEntry(token) {
 
 async function folderEntryToken(folderToken, fileName) {
     const entry = await (await resolveFolder(folderToken)).getEntry(fileName);
-    return { token: await fs.createSessionToken(entry), name: entry.name, isFile: entry.isFile };
+    return { token: await fs.createSessionToken(entry), name: entry.name, isFile: entry.isFile, nativePath: entry.nativePath || "" };
 }
 
 async function saveTextFile(nameInput, content) {

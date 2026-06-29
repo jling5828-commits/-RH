@@ -125,15 +125,21 @@ function resolveTargetSize(bounds, request) {
 export const getSelectionBounds = () => {
     const doc = app.activeDocument;
     if (!doc) throw new Error("[NO_DOC]请先打开一个文档");
-    const fromSelection = safeBounds(doc.selection?.bounds);
+    const fromSelection = getActiveSelectionBounds(doc);
     if (fromSelection) return fromSelection;
     const { width, height } = documentSize(doc);
     return { left: 0, top: 0, right: width, bottom: height };
 };
 
-export const resolveCaptureBounds = (doc, mode) => {
+function getActiveSelectionBounds(doc) {
+    return safeBounds(doc?.selection?.bounds);
+}
+
+export const resolveCaptureBounds = (doc, mode, opts = {}) => {
     if (!doc) throw new Error("[NO_DOC]请先打开一个文档");
-    let bounds = clampBoundsToDocument(getSelectionBounds(), doc);
+    const selectionBounds = getActiveSelectionBounds(doc);
+    if (opts.requireSelection && !selectionBounds) throw new Error("[NO_SELECTION]请先用框选工具框选需要处理的图片区域");
+    let bounds = clampBoundsToDocument(selectionBounds || getSelectionBounds(), doc);
     let layerID = null;
     if (mode === "layer") {
         const layer = doc.activeLayers?.[0];
@@ -168,7 +174,7 @@ export async function getActiveSelectionCaptureInfo(mode = "canvas") {
 
     const doc = app.activeDocument;
     if (!doc) return null;
-    if (!safeBounds(doc.selection?.bounds)) return null;
+    if (!getActiveSelectionBounds(doc)) return null;
     const { bounds, layerID } = resolveCaptureBounds(doc, mode);
     const { width, height } = boundsSize(bounds);
     return { docId: doc.id, bounds, layerID, width, height };
@@ -595,6 +601,8 @@ export const captureAll = async (mode = "canvas", opts = {}) => {
     const previewReadCap = Number(opts.previewReadCap) > 0 ? Number(opts.previewReadCap) : PREVIEW_CAPTURE_MAX_SIZE;
     const previewEncodeMax = Number(opts.previewEncodeMax) > 0 ? Number(opts.previewEncodeMax) : PREVIEW_MAX_SIZE;
     const splitMaskMode = Boolean(opts.splitMaskMode);
+    const requireSelection = Boolean(opts.requireSelection);
+    const hostPreviewFromUpload = opts.hostPreviewFromUpload === true || (opts.hostPreviewFromUpload !== false && !splitMaskMode);
     const jpegQuality = Number(opts.jpegQuality) >= 1 && Number(opts.jpegQuality) <= 100 ? Number(opts.jpegQuality) : DEFAULT_JPEG_QUALITY;
     const profiler = profileRecorder(opts.captureProfile === true);
     const onPreviewReady = typeof opts.onPreviewReady === "function" ? opts.onPreviewReady : null;
@@ -602,36 +610,7 @@ export const captureAll = async (mode = "canvas", opts = {}) => {
     if (splitMaskMode && mode === "layer") uploadEncodeFormat = "png";
 
     if (isInWebView() && photoshop.captureSelection) {
-        const previewRequest = splitMaskMode
-            ? { _legacyMaxSize: previewReadCap, splitMaskMode: true }
-            : { _legacyMaxSize: previewReadCap };
-        const previewData = await profiler.measure("host_preview_capture", "preview capture in host", () => photoshop.captureSelection(mode, previewRequest));
-        const previewPixels = decodeHostRgba(previewData);
-        if (splitMaskMode && mode === "layer") setOpaqueAlpha(previewPixels.rgbaData);
-        const previewBase64 = await profiler.measure("preview_encode", "encode preview", () =>
-            previewFromRgba(mode, previewPixels.rgbaData, previewPixels.width, previewPixels.height, previewEncodeMax)
-        );
-        await notifyPreview(onPreviewReady, {
-            previewBase64,
-            uploadWidth: previewPixels.width,
-            uploadHeight: previewPixels.height,
-            bounds: previewPixels.bounds,
-        });
-        previewPixels.rgbaData = null;
-
-        const fullRequest = {
-            sizeLimitMode: "longEdge",
-            longEdgeMax,
-            splitMaskMode,
-            __returnHostSession: true,
-            uploadEncodeFormat,
-            jpegQuality,
-            __retainUploadSession: Boolean(opts.__retainUploadSession),
-        };
-        const hostUpload = await profiler.measure("host_upload_session", "host upload session", () => photoshop.captureSelection(mode, fullRequest));
-        if (!hostUpload?.uploadSessionId) throw new Error("宿主未返回 uploadSessionId");
-        const profile = profiler.result();
-        return {
+        const toHostResult = (previewBase64, hostUpload, profile) => ({
             previewBase64,
             uploadSessionId: hostUpload.uploadSessionId,
             uploadWidth: hostUpload.uploadWidth,
@@ -649,12 +628,58 @@ export const captureAll = async (mode = "canvas", opts = {}) => {
                   }
                 : {}),
             ...(profile ? { captureProfile: profile } : {}),
+        });
+        const fullRequest = {
+            sizeLimitMode: "longEdge",
+            longEdgeMax,
+            splitMaskMode,
+            requireSelection,
+            __returnHostSession: true,
+            __previewFromUpload: hostPreviewFromUpload,
+            previewMaxEdge: previewEncodeMax,
+            uploadEncodeFormat,
+            jpegQuality,
+            __retainUploadSession: Boolean(opts.__retainUploadSession),
         };
+        if (hostPreviewFromUpload) {
+            const hostUpload = await profiler.measure("host_upload_session", "host upload session", () => photoshop.captureSelection(mode, fullRequest));
+            if (!hostUpload?.uploadSessionId) throw new Error("宿主未返回 uploadSessionId");
+            const previewBase64 = String(hostUpload.previewBase64 || "").trim();
+            if (!previewBase64) throw new Error("宿主未返回预览图");
+            await notifyPreview(onPreviewReady, {
+                previewBase64,
+                uploadWidth: hostUpload.uploadWidth,
+                uploadHeight: hostUpload.uploadHeight,
+                bounds: hostUpload.bounds ?? null,
+            });
+            return toHostResult(previewBase64, hostUpload, profiler.result());
+        }
+
+        const previewRequest = splitMaskMode
+            ? { _legacyMaxSize: previewReadCap, splitMaskMode: true, requireSelection }
+            : { _legacyMaxSize: previewReadCap, requireSelection };
+        const previewData = await profiler.measure("host_preview_capture", "preview capture in host", () => photoshop.captureSelection(mode, previewRequest));
+        const previewPixels = decodeHostRgba(previewData);
+        if (splitMaskMode && mode === "layer") setOpaqueAlpha(previewPixels.rgbaData);
+        const previewBase64 = await profiler.measure("preview_encode", "encode preview", () =>
+            previewFromRgba(mode, previewPixels.rgbaData, previewPixels.width, previewPixels.height, previewEncodeMax)
+        );
+        await notifyPreview(onPreviewReady, {
+            previewBase64,
+            uploadWidth: previewPixels.width,
+            uploadHeight: previewPixels.height,
+            bounds: previewPixels.bounds,
+        });
+        previewPixels.rgbaData = null;
+
+        const hostUpload = await profiler.measure("host_upload_session", "host upload session", () => photoshop.captureSelection(mode, fullRequest));
+        if (!hostUpload?.uploadSessionId) throw new Error("宿主未返回 uploadSessionId");
+        return toHostResult(previewBase64, hostUpload, profiler.result());
     }
 
     const doc = app.activeDocument;
     if (!doc) throw new Error("[NO_DOC]请先打开一个文档");
-    const { bounds, layerID, origWidth, origHeight } = resolveCaptureBounds(doc, mode);
+    const { bounds, layerID, origWidth, origHeight } = resolveCaptureBounds(doc, mode, { requireSelection });
     const readFlags = { skipLayerMaskComposite: splitMaskMode && mode === "layer" };
 
     const previewPixels = await profiler.measure("uxp_preview_read", "read preview pixels", () =>

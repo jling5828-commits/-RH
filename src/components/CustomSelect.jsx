@@ -2,10 +2,13 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from "react-dom";
 import "./CustomSelect.css";
 
-const DROPDOWN_PORTAL_Z_INDEX = 100010;
+const DROPDOWN_PORTAL_Z_INDEX = 100020;
 const DROPDOWN_MARGIN = 8;
 const DROPDOWN_MAX_HEIGHT = 240;
 const DEFAULT_CLASS_PREFIX = "xlrh-param-select";
+const CLOSE_CUSTOM_SELECTS_EVENT = "xlrh-close-custom-selects";
+const OUTSIDE_CLOSE_EVENTS = ["pointerdown", "mousedown", "click"];
+let customSelectIdSeed = 0;
 
 function composeClass(...parts) {
     return parts.filter(Boolean).join(" ");
@@ -85,6 +88,22 @@ function skin(prefix) {
     };
 }
 
+function makeCloseEvent(sourceId) {
+    const detail = { sourceId };
+    if (typeof window !== "undefined" && typeof window.CustomEvent === "function") {
+        return new window.CustomEvent(CLOSE_CUSTOM_SELECTS_EVENT, { detail });
+    }
+    const event = new window.Event(CLOSE_CUSTOM_SELECTS_EVENT);
+    Object.defineProperty(event, "detail", { value: detail });
+    return event;
+}
+
+function requestCloseCustomSelects(sourceId) {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(makeCloseEvent(sourceId));
+    if (typeof document !== "undefined") document.dispatchEvent(makeCloseEvent(sourceId));
+}
+
 export function CustomSelect({
     label,
     value,
@@ -102,7 +121,7 @@ export function CustomSelect({
     suffix,
     controlTitle,
     dropdownPlacement = "up",
-    useDropdownPortal = false,
+    useDropdownPortal = true,
     portalDropdownClassName = "",
     classPrefix = DEFAULT_CLASS_PREFIX,
 }) {
@@ -110,20 +129,60 @@ export function CustomSelect({
     const [portalGeometry, setPortalGeometry] = useState(null);
     const rootRef = useRef(null);
     const dropdownRef = useRef(null);
+    const closeTimerRef = useRef(0);
+    const instanceIdRef = useRef(`select-${++customSelectIdSeed}`);
     const classes = useMemo(() => skin(classPrefix), [classPrefix]);
     const isOpen = phase === "open";
     const isClosing = phase === "closing";
     const isVisible = phase !== "closed";
     const isDropDown = dropdownPlacement === "down";
 
-    const closeMenu = useCallback(() => {
-        setPhase((current) => (current === "closed" ? current : "closing"));
+    const finishClose = useCallback(() => {
+        if (typeof window !== "undefined") window.clearTimeout(closeTimerRef.current);
+        setPhase("closed");
     }, []);
+
+    const closeMenu = useCallback(() => {
+        setPhase((current) => {
+            if (current === "closed") return current;
+            if (typeof window === "undefined") return "closed";
+            window.clearTimeout(closeTimerRef.current);
+            closeTimerRef.current = window.setTimeout(finishClose, 180);
+            return "closing";
+        });
+    }, [finishClose]);
 
     const toggleMenu = useCallback(() => {
         if (disabled) return;
-        setPhase((current) => (current === "open" ? "closing" : "open"));
-    }, [disabled]);
+        if (isOpen) {
+            closeMenu();
+            return;
+        }
+        if (typeof window !== "undefined") window.clearTimeout(closeTimerRef.current);
+        requestCloseCustomSelects(instanceIdRef.current);
+        setPhase("open");
+    }, [closeMenu, disabled, isOpen]);
+
+    useEffect(() => () => {
+        if (typeof window !== "undefined") window.clearTimeout(closeTimerRef.current);
+    }, []);
+
+    useEffect(() => {
+        if (disabled) finishClose();
+    }, [disabled, finishClose]);
+
+    useEffect(() => {
+        const closeOthers = (event) => {
+            if (event?.detail?.sourceId === instanceIdRef.current) return;
+            finishClose();
+        };
+        window.addEventListener(CLOSE_CUSTOM_SELECTS_EVENT, closeOthers);
+        document.addEventListener(CLOSE_CUSTOM_SELECTS_EVENT, closeOthers);
+        return () => {
+            window.removeEventListener(CLOSE_CUSTOM_SELECTS_EVENT, closeOthers);
+            document.removeEventListener(CLOSE_CUSTOM_SELECTS_EVENT, closeOthers);
+        };
+    }, [finishClose]);
 
     const refreshPortalGeometry = useCallback(() => {
         if (!useDropdownPortal) return;
@@ -145,16 +204,26 @@ export function CustomSelect({
     }, [isVisible, refreshPortalGeometry, useDropdownPortal]);
 
     useEffect(() => {
-        if (!isOpen) return undefined;
-        const onPointerDown = (event) => {
+        if (!isVisible) return undefined;
+        const onOutsideEvent = (event) => {
             const target = event.target;
             if (rootRef.current?.contains(target)) return;
             if (useDropdownPortal && dropdownRef.current?.contains(target)) return;
             closeMenu();
         };
-        document.addEventListener("mousedown", onPointerDown);
-        return () => document.removeEventListener("mousedown", onPointerDown);
-    }, [closeMenu, isOpen, useDropdownPortal]);
+        const onKeyDown = (event) => {
+            if (event.key === "Escape") closeMenu();
+        };
+        const onWindowBlur = () => finishClose();
+        OUTSIDE_CLOSE_EVENTS.forEach((type) => document.addEventListener(type, onOutsideEvent, true));
+        document.addEventListener("keydown", onKeyDown, true);
+        window.addEventListener("blur", onWindowBlur);
+        return () => {
+            OUTSIDE_CLOSE_EVENTS.forEach((type) => document.removeEventListener(type, onOutsideEvent, true));
+            document.removeEventListener("keydown", onKeyDown, true);
+            window.removeEventListener("blur", onWindowBlur);
+        };
+    }, [closeMenu, finishClose, isVisible, useDropdownPortal]);
 
     const portalClass = useMemo(() => {
         const extra = String(portalDropdownClassName || "").trim();
@@ -178,7 +247,7 @@ export function CustomSelect({
             )}
             style={dropdownStyle}
             onAnimationEnd={(event) => {
-                if (event.currentTarget === event.target && isClosing) setPhase("closed");
+                if (event.currentTarget === event.target && isClosing) finishClose();
             }}
         >
             {optionItems.map((option, index) => {

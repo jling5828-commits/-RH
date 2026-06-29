@@ -3,7 +3,7 @@
     position: relative;
     z-index: 10;
     width: 100%;
-    min-height: 35px;
+    min-height: 36px;
     display: grid;
     grid-template-columns: minmax(36px, auto) 1px minmax(0, 1fr);
     align-items: stretch;
@@ -29,7 +29,7 @@
 
 .xlrh-param-select-box--open,
 .xlrh-param-select-box--closing {
-    z-index: 10000 !important;
+    z-index: 100020 !important;
 }
 
 .xlrh-param-select-box--open {
@@ -59,12 +59,13 @@
 }
 
 .xlrh-param-select-content {
+    position: relative;
     min-width: 0;
     height: 100%;
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 0 8px;
+    padding: 0 30px 0 8px;
     overflow: hidden visible;
     cursor: pointer;
 }
@@ -89,24 +90,46 @@
 }
 
 .xlrh-param-select-caret {
-    flex: 0 0 auto;
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    inline-size: 18px;
+    block-size: 18px;
+    display: inline-grid;
+    place-items: center;
     color: rgba(255, 255, 255, 0.42);
-    font-size: 9px;
-    transform: rotate(-90deg);
-    transition: color 0.13s ease, transform 0.13s ease;
+    font-size: 0;
+    line-height: 1;
+    transform: translateY(-50%);
+    transition: color 0.16s ease;
+}
+
+.xlrh-param-select-caret::before {
+    inline-size: 10px;
+    block-size: 6px;
+    display: block;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23fff' d='M0 0h10L5 6z'/%3E%3C/svg%3E") center / 10px 6px no-repeat;
+    content: "";
+    transform: rotate(0deg);
+    transition: transform 0.18s ease;
 }
 
 .xlrh-param-select-caret--open {
-    color: var(--xlrh-select-accent);
+    color: rgba(255, 255, 255, 0.94);
+}
+
+.xlrh-param-select-caret--open::before {
     transform: rotate(180deg);
 }
 
-.xlrh-param-select--down .xlrh-param-select-caret--open {
-    transform: rotate(0deg);
+.xlrh-param-select-box:hover .xlrh-param-select-caret,
+.xlrh-param-select-box--open .xlrh-param-select-caret {
+    color: rgba(255, 255, 255, 0.94);
 }
 
 .xlrh-param-select-menu {
     position: absolute;
+    z-index: 100020;
     left: 0;
     right: 0;
     top: auto;

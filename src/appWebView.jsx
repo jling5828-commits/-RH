@@ -9,6 +9,7 @@ import { RunninghubShell } from "./runninghub/ui/RunninghubShell.jsx";
 import { installRuntimeLogger } from "./utils/runtimeLogger.js";
 import { StatusProvider } from "./utils/StatusContext.jsx";
 import { migrateXlrhStorageKeys } from "./utils/storageKeyCompat.js";
+import { installDropdownFocusEffect } from "./utils/dropdownFocusEffect.js";
 
 const BOOT_ROOT_ID = "root";
 const PANEL_LOG = "[XLRH]";
@@ -176,6 +177,7 @@ async function startPanel(rootElement) {
 }
 
 installRuntimeLogger();
+installDropdownFocusEffect();
 
 const rootElement = document.getElementById(BOOT_ROOT_ID);
 installWindowCrashFallback(() => rootElement || document.body);

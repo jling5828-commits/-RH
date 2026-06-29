@@ -3,6 +3,9 @@ import { PLUGIN_HTTP_USER_AGENT_RH } from "../../src/pluginMeta.js";
 const RH_HOST_TIMEOUT_MS = 120000;
 const MIN_TIMEOUT_MS = 1000;
 const HEADER_CONTENT_TYPE = "application/json";
+const RH_NETWORK_FAILED_CODE = "RH_NETWORK_FAILED";
+const RH_REQUEST_TIMEOUT_CODE = "RH_REQUEST_TIMEOUT";
+const RH_REQUEST_CANCELLED_CODE = "RH_REQUEST_CANCELLED";
 const DEFAULT_FAILURE_TEXT = "RunningHub HTTP 请求失败";
 const BAD_JSON_TEXT = "RunningHub 响应不是合法 JSON";
 
@@ -44,20 +47,56 @@ function resolvedTimeout(timeoutMs) {
     return Math.max(MIN_TIMEOUT_MS, Number.isFinite(value) && value > 0 ? value : RH_HOST_TIMEOUT_MS);
 }
 
+function hostLabelFromUrl(url) {
+    try {
+        return new URL(String(url || "")).host || String(url || "");
+    } catch {
+        return String(url || "").replace(/^https?:\/\//i, "").split("/")[0] || "RunningHub";
+    }
+}
+
+function originalErrorMessage(error) {
+    return String(error?.message || error || "").trim();
+}
+
+export function makeRhHostNetworkError(url, error, opts = {}) {
+    const raw = originalErrorMessage(error);
+    const host = hostLabelFromUrl(url);
+    const timedOut = opts.timedOut === true;
+    const cancelled = !timedOut && error?.name === "AbortError";
+    const stage = opts.stage ? `${opts.stage} ` : "";
+    const message = cancelled
+        ? `RunningHub ${stage}请求已取消`
+        : timedOut
+            ? `RunningHub ${stage}请求超时：${host}，请检查网络/VPN/代理/防火墙后重试`
+            : `RunningHub ${stage}网络请求失败：无法连接 ${host}，请检查网络/VPN/代理/防火墙或稍后重试${raw ? `（原始错误：${raw}）` : ""}`;
+    const wrapped = new Error(message);
+    wrapped.code = cancelled ? RH_REQUEST_CANCELLED_CODE : timedOut ? RH_REQUEST_TIMEOUT_CODE : RH_NETWORK_FAILED_CODE;
+    wrapped.status = 0;
+    wrapped.urlHost = host;
+    if (raw) wrapped.originalMessage = raw;
+    return wrapped;
+}
+
 function createAbortScope(parentSignal, timeoutMs) {
     if (typeof AbortController === "undefined") {
-        return { signal: parentSignal, dispose() {} };
+        return { signal: parentSignal, timedOut: () => false, dispose() {} };
     }
 
     const controller = new AbortController();
     const abort = () => controller.abort();
-    const timer = setTimeout(abort, resolvedTimeout(timeoutMs));
+    let timedOut = false;
+    const timer = setTimeout(() => {
+        timedOut = true;
+        abort();
+    }, resolvedTimeout(timeoutMs));
 
     if (parentSignal?.aborted) abort();
     else if (parentSignal) parentSignal.addEventListener("abort", abort, { once: true });
 
     return {
         signal: controller.signal,
+        timedOut: () => timedOut,
         dispose() {
             clearTimeout(timer);
             if (parentSignal) parentSignal.removeEventListener("abort", abort);
@@ -75,6 +114,8 @@ async function fetchWithHostTimeout(url, init, opts = {}) {
     const scope = createAbortScope(opts.signal, opts.timeoutMs);
     try {
         return await fetch(url, { ...init, signal: scope.signal });
+    } catch (error) {
+        throw makeRhHostNetworkError(url, error, { timedOut: scope.timedOut(), stage: opts.stage });
     } finally {
         scope.dispose();
     }
@@ -92,12 +133,12 @@ async function responseAsLooseJson(response) {
 }
 
 async function requestLooseJson(method, url, body, apiKey, opts = {}) {
-    const response = await fetchWithHostTimeout(url, makeFetchInit(method, body, apiKey), opts);
+    const response = await fetchWithHostTimeout(url, makeFetchInit(method, body, apiKey), { ...opts, stage: opts.stage || "接口" });
     return responseAsLooseJson(response);
 }
 
 async function requestStrictJson(url, body, apiKey, opts = {}, headers = makeRhHeaders(apiKey)) {
-    const response = await fetchWithHostTimeout(url, makeFetchInit("POST", body, apiKey, headers), opts);
+    const response = await fetchWithHostTimeout(url, makeFetchInit("POST", body, apiKey, headers), { ...opts, stage: opts.stage || "接口" });
     const rawText = await response.text().catch(() => "");
 
     if (!response.ok) {

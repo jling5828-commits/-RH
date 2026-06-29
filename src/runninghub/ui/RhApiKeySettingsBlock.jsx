@@ -38,7 +38,7 @@ const IconEyeOff = () => (
     </svg>
 );
 
-const IconExternalLink = () => (
+export const IconExternalLink = () => (
     <svg
         width="13"
         height="13"
@@ -72,7 +72,7 @@ const API_KEY_MODES = [
     },
 ];
 
-function RhSecureKeyField({ value, onValueChange, placeholder }) {
+export function RhSecureKeyField({ value, onValueChange, placeholder }) {
     const [visible, setVisible] = useState(false);
     const [focused, setFocused] = useState(false);
     const blurTimer = useRef(null);

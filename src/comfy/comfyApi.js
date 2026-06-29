@@ -18,6 +18,28 @@ function joinComfyUrl(baseUrl, path) {
     return `${base}${p.startsWith("/") ? p : `/${p}`}`;
 }
 
+function comfyConnectionCandidates(value) {
+    const url = normalizeComfyBaseUrl(value);
+    return url ? [url] : [];
+}
+
+function isXgOsDesktopUrl(value) {
+    const text = cleanText(value);
+    if (!text) return false;
+    try {
+        const url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`);
+        return /^[a-z0-9]+\.os\.x-gpu\.com$/i.test(url.hostname);
+    } catch (_) {
+        return /\.os\.x-gpu\.com/i.test(text);
+    }
+}
+
+function buildXgOsComfyError() {
+    return new Error(
+        "检测到仙宫云 OS 桌面地址。OS 地址不能直接连接 Comfy UI，也不能可靠推断外部端口前缀。请在 OS 里打开 ComfyUI 窗口右上角“新窗口/外部打开”图标，复制新窗口里的 container.x-gpu.com 地址到插件。"
+    );
+}
+
 function encodeUserDataPath(path) {
     return String(path || "").split("/").map(encodeURIComponent).join("%2F");
 }
@@ -125,15 +147,24 @@ async function comfyFetchJson(baseUrl, path, opts = {}) {
 }
 
 export async function testComfyConnection(baseUrl) {
-    const url = normalizeComfyBaseUrl(baseUrl);
-    if (!url) throw new Error("请输入 Comfy UI 地址");
-    try {
-        const stats = await comfyFetchJson(url, "/system_stats", { timeoutMs: 8000 });
-        return { ok: true, baseUrl: url, stats };
-    } catch (first) {
-        const queue = await comfyFetchJson(url, "/queue", { timeoutMs: 8000 });
-        return { ok: true, baseUrl: url, stats: queue || {} };
+    if (isXgOsDesktopUrl(baseUrl)) throw buildXgOsComfyError();
+    const urls = comfyConnectionCandidates(baseUrl);
+    if (!urls.length) throw new Error("请输入 Comfy UI 地址");
+    let lastError = null;
+    for (const url of urls) {
+        try {
+            const stats = await comfyFetchJson(url, "/system_stats", { timeoutMs: 8000 });
+            return { ok: true, baseUrl: url, stats };
+        } catch (first) {
+            try {
+                const queue = await comfyFetchJson(url, "/queue", { timeoutMs: 8000 });
+                return { ok: true, baseUrl: url, stats: queue || {} };
+            } catch (second) {
+                lastError = second || first;
+            }
+        }
     }
+    throw lastError || new Error("Comfy UI 连接失败");
 }
 
 export async function ensureComfyReady(baseUrl) {

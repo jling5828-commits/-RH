@@ -1,11 +1,11 @@
 import { photoshop, storage } from "../bridge/uxpBridge.js";
 import { PLUGIN_PANEL_TITLE } from "../pluginMeta.js";
 import { getPlaceEdgeFeatherOptsFromStorage } from "./placeEdgeFeatherOpts.js";
-import { readCompatLocalStorage } from "./storageKeyCompat.js";
+import { readAutoReturnEnabled } from "./sharedInteractionSettings.js";
 
 function isAutoPlaceEnabled(options = {}) {
     if (options?.force) return true;
-    return readCompatLocalStorage("xlrh_auto_place") !== "false";
+    return readAutoReturnEnabled();
 }
 
 function hasFiles(list) {
@@ -60,8 +60,19 @@ async function placeExternalDocumentOne(docId, folderToken, fileName, bounds, pl
     await photoshop.commands.placeToDocument(docId, token, bounds, placeOpts);
 }
 
-async function placeSingleOrGroup({ docId, folderToken, files, groupName, placeOpts }) {
+async function placeFilesOneByOne({ docId, folderToken, files, placeOpts }) {
+    for (const file of files) {
+        if (docId == null) await placeCurrentDocumentOne(folderToken, file.fileName, file.bounds, placeOpts);
+        else await placeExternalDocumentOne(docId, folderToken, file.fileName, file.bounds, placeOpts);
+    }
+}
+
+async function placeSingleOrGroup({ docId, folderToken, files, groupName, placeOpts, groupEnabled = true }) {
     if (!files.length) return;
+    if (files.length > 1 && groupEnabled === false) {
+        await placeFilesOneByOne({ docId, folderToken, files, placeOpts });
+        return;
+    }
     if (docId == null) {
         if (files.length === 1) {
             await placeCurrentDocumentOne(folderToken, files[0].fileName, files[0].bounds, placeOpts);
@@ -97,6 +108,7 @@ export async function performAutoPlace(savedFileNames, groupName, savedBounds, f
             files,
             groupName,
             placeOpts,
+            groupEnabled: options.group !== false,
         });
     } catch (error) {
         console.warn("[XiaoLiangRH AutoPlace] 贴回失败:", error);
@@ -115,6 +127,7 @@ export async function performAutoPlaceBatch(savedEntries, folderToken, groupName
                 files: group.files,
                 groupName: groupNameBase,
                 placeOpts,
+                groupEnabled: options.group !== false,
             });
         }
     } catch (error) {

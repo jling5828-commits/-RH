@@ -320,7 +320,7 @@
 
 .preset-context-menu {
     position: fixed;
-    z-index: 9999;
+    z-index: 100020;
     min-width: 132px;
     padding: 5px;
     border: 1px solid rgba(255, 255, 255, 0.16);

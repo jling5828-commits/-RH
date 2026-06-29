@@ -610,6 +610,7 @@ function objectInfoInputSpec(objectInfo, classType, inputName) {
 function knownWidgetNames(classType) {
     if (/^LoadImage$/i.test(classType)) return ["image"];
     if (/^LoadImageMask$/i.test(classType)) return ["image", "channel"];
+    if (/(load|upload|input|source).*image|image.*(load|upload|input|source)|photoshop.*(image|layer)|(image|layer).*photoshop/i.test(classType)) return ["image"];
     if (/^KSampler$/i.test(classType)) return ["seed", "steps", "cfg", "sampler_name", "scheduler", "denoise"];
     if (/^EmptyLatentImage$/i.test(classType)) return ["width", "height", "batch_size"];
     if (/^CLIPTextEncode$/i.test(classType)) return ["text"];
@@ -645,6 +646,7 @@ function canvasWidgetNames(node, objectInfo) {
     for (const name of objectInfoInputNames(objectInfo, classType)) {
         if (!names.includes(name)) names.push(name);
     }
+    if (!names.length && hasCanvasWidgets(node) && looksImageSourceNode(node)) names.push("image");
     return names;
 }
 
@@ -832,14 +834,27 @@ function fieldTitle(nodeId, node, inputName, marker) {
     return marker?.label || `${nodeDisplayName(nodeId, node)} · ${inputName}`;
 }
 
+function looksImageFieldName(inputName) {
+    const name = String(inputName || "").toLowerCase();
+    return name === "image" || /(^|[_\s-])(image|img|picture|photo)($|[_\s-])/i.test(name) || /(图像|图片|照片)/.test(name);
+}
+
+function looksImageSourceNode(node) {
+    if (isImageOutputNode(node)) return false;
+    const text = [node?.class_type, node?.type, ...nodeTitleCandidates(node)].map(cleanText).join(" ").toLowerCase();
+    return /(load|upload|input|source).*image|image.*(load|upload|input|source)|photoshop|layer/.test(text) || /((上传|导入|输入).*(图像|图片|照片)|(图像|图片|照片).*(上传|导入|输入))/.test(text);
+}
+
 function looksImageInput(node, inputName, value) {
     if (isLinkedInput(value)) return false;
-    const cls = String(node?.class_type || "").toLowerCase();
     const name = String(inputName || "").toLowerCase();
-    if (cls.includes("loadimage") && name === "image") return true;
-    if (cls.includes("load") && name === "image") return true;
-    if (name === "image" && typeof value === "string") return true;
-    return /(^|_)image($|_)/i.test(inputName) && typeof value === "string";
+    const imageSource = looksImageSourceNode(node);
+    const imageValue = value == null || typeof value === "string" || (imageSource && looksImageFieldName(name));
+    if (!imageValue) return false;
+    if (looksImageFieldName(name) && imageSource) return true;
+    if (looksImageFieldName(name) && typeof value === "string") return true;
+    if (imageSource && /^(input|upload|source|file|filename|path|url|mask)$/i.test(name)) return true;
+    return /(upload|file|path)/i.test(name) && /(image|img|picture|photo)/i.test(name);
 }
 
 function comfyInputSpec(objectInfo, node, inputName) {
@@ -883,6 +898,15 @@ function fieldTypeFromValue(value) {
     if (typeof value === "number") return Number.isInteger(value) ? "INT" : "FLOAT";
     if (typeof value === "boolean") return "BOOLEAN";
     return String(value || "").length > 48 || /text|prompt|positive|negative/i.test(String(value || "")) ? "TEXT" : "STRING";
+}
+
+const AUTO_PARAM_INPUT_RE = /^(text|prompt|positive|negative|seed|steps|cfg|denoise|width|height|batch_size|sampler_name|scheduler|noise_seed|guidance|strength|scale)$/i;
+function isAutoParamCandidate(node, inputName, fieldType) {
+    const name = cleanText(inputName);
+    const cls = cleanText(node?.class_type);
+    if (AUTO_PARAM_INPUT_RE.test(name)) return true;
+    if ((fieldType === "TEXT" || fieldType === "STRING") && /prompt|positive|negative|text/i.test(`${name} ${cls}`)) return true;
+    return /^(KSampler|KSamplerAdvanced|EmptyLatentImage|CLIPTextEncode)$/i.test(cls) && knownWidgetNames(cls).includes(name);
 }
 
 function sortRows(rows) {
@@ -963,7 +987,9 @@ function mergeMarkedParamRows(rows) {
 
 export function analyzeComfyPrompt(prompt, objectInfo, selectorRows = []) {
     const imageRows = [];
+    const autoImageRows = [];
     const paramRows = [];
+    const autoParamRows = [];
     const nodes = objectOrNull(prompt) || {};
     for (const [nodeId, node] of Object.entries(nodes)) {
         const inputs = objectOrNull(node?.inputs) || {};
@@ -989,18 +1015,27 @@ export function analyzeComfyPrompt(prompt, objectInfo, selectorRows = []) {
                 description: fieldTitle(nodeId, node, inputName, marker),
                 fieldValue: value == null ? "" : String(value),
             };
-            if (!marker) continue;
-            if (specType === "IMAGE" || specType === "IMAGEUPLOAD" || looksImageInput(node, inputName, value)) {
-                imageRows.push({ ...base, label: base.label || nodeDisplayName(nodeId, node), fieldType: "IMAGE" });
+            if (!isImageOutputNode(node) && (specType === "IMAGE" || specType === "IMAGEUPLOAD" || looksImageInput(node, inputName, value))) {
+                const row = { ...base, label: base.label || nodeDisplayName(nodeId, node), fieldType: "IMAGE" };
+                (marker ? imageRows : autoImageRows).push(row);
             } else {
                 const fieldType = spec ? fieldTypeFromSpec(spec, value) : fieldTypeFromValue(value);
                 if (BLOCKED_PARAM_TYPES.has(fieldType)) continue;
+                if (!marker && !isAutoParamCandidate(node, inputName, fieldType)) continue;
                 const numeric = fieldType === "INT" || fieldType === "FLOAT" ? { ...comfyNumericSpec(spec), ...numericRangeFromConfig(inputMeta) } : {};
-                paramRows.push({ ...base, fieldType, options: comfySpecOptions(spec), ...numeric, originalType: typeof value });
+                (marker ? paramRows : autoParamRows).push({ ...base, fieldType, options: comfySpecOptions(spec), ...numeric, originalType: typeof value });
             }
         }
     }
-    return { imageRows: sortRows(mergeSourceRows(imageRows)), paramRows: [...(selectorRows || []), ...sortRows(mergeMarkedParamRows(mergeSourceRows(paramRows)))] };
+    const markedImages = sortRows(mergeSourceRows(imageRows));
+    const fallbackImages = sortRows(mergeSourceRows(autoImageRows));
+    const markedParams = sortRows(mergeMarkedParamRows(mergeSourceRows(paramRows)));
+    const selectors = selectorRows || [];
+    const fallbackParams = markedParams.length ? markedParams : sortRows(mergeSourceRows(autoParamRows));
+    return {
+        imageRows: markedImages.length ? markedImages : fallbackImages,
+        paramRows: [...selectors, ...fallbackParams],
+    };
 }
 
 function coerceParamValue(originalValue, nextValue, spec = null) {
@@ -1020,7 +1055,12 @@ function coerceParamValue(originalValue, nextValue, spec = null) {
 function uploadedFileValue(uploaded) {
     const name = String(uploaded?.name || uploaded?.filename || "").trim();
     const subfolder = String(uploaded?.subfolder || "").trim();
-    return subfolder ? `${subfolder}/${name}` : name;
+    if (!name || !subfolder || name.includes("/")) return name;
+    return `${subfolder}/${name}`;
+}
+
+function imageRowLabel(row, index) {
+    return cleanText(row?.label || row?.description || row?.nodeName) || `图${index + 1}`;
 }
 
 function singleUploadedImageValue(uploadedByKey) {
@@ -1042,6 +1082,7 @@ function fillUnmarkedImageInputs(prompt, imageRows, uploadedByKey, objectInfo) {
     for (const [nodeId, node] of Object.entries(prompt || {})) {
         const inputs = objectOrNull(node?.inputs);
         if (!inputs) continue;
+        if (isImageOutputNode(node)) continue;
         for (const [name, value] of Object.entries(inputs)) {
             if (explicit.has(`${nodeId}::${name}`) || Array.isArray(value)) continue;
             const specType = comfySpecType(objectInfoInputSpec(objectInfo, node.class_type, name));
@@ -1054,7 +1095,8 @@ function fillUnmarkedImageInputs(prompt, imageRows, uploadedByKey, objectInfo) {
 }
 
 function isImageOutputNode(node) {
-    return /^(SaveImage|PreviewImage)$/i.test(cleanText(node?.class_type));
+    const text = [node?.class_type, node?.type, ...nodeTitleCandidates(node)].map(cleanText).join(" ").toLowerCase();
+    return /^(SaveImage|PreviewImage)$/i.test(cleanText(node?.class_type)) || /(save|preview|output|export|write).*image|image.*(save|preview|output|export|write)/i.test(text) || /((\u4fdd\u5b58|\u9884\u89c8|\u8f93\u51fa|\u5bfc\u51fa).*(\u56fe\u50cf|\u56fe\u7247|\u7167\u7247)|(\u56fe\u50cf|\u56fe\u7247|\u7167\u7247).*(\u4fdd\u5b58|\u9884\u89c8|\u8f93\u51fa|\u5bfc\u51fa))/i.test(text);
 }
 
 function collectPromptDependencies(prompt, nodeId, keep = new Set()) {
@@ -1154,14 +1196,18 @@ export function randomizeComfyPromptSeeds(basePrompt, objectInfo = null) {
 
 export function buildComfyPromptForRun(basePrompt, imageRows, paramRows, fieldValues, uploadedByKey, objectInfo = null) {
     const prompt = deepClone(basePrompt);
-    for (const row of imageRows || []) {
+    for (const [index, row] of (imageRows || []).entries()) {
         const key = row?.key || comfyRowKey(row.nodeId, row.fieldName);
         const uploaded = uploadedByKey?.[key];
         const value = uploadedFileValue(uploaded);
-        if (!value) continue;
+        if (!value) throw new Error(`请先捕获图像：${imageRowLabel(row, index)}`);
+        let applied = false;
         for (const target of rowTargets(row)) {
-            if (prompt?.[target.nodeId]?.inputs) prompt[target.nodeId].inputs[target.fieldName] = value;
+            if (!prompt?.[target.nodeId]?.inputs) continue;
+            prompt[target.nodeId].inputs[target.fieldName] = value;
+            applied = true;
         }
+        if (!applied) throw new Error(`工作流图像输入不存在：${imageRowLabel(row, index)}`);
     }
     fillUnmarkedImageInputs(prompt, imageRows, uploadedByKey, objectInfo);
     for (const row of paramRows || []) {
@@ -1185,11 +1231,16 @@ export function initialComfyFieldValues(paramRows) {
 
 export function firstComfyImageMissing(imageRows, pendingUploads) {
     if (!Array.isArray(imageRows) || imageRows.length === 0) return "";
-    const first = imageRows[0];
-    const key = first.key || comfyRowKey(first.nodeId, first.fieldName);
-    const upload = pendingUploads?.[key];
-    if (upload?.base64 || upload?.uploadSessionId) return "";
-    return "请先捕获图1";
+    const seen = new Set();
+    for (const [index, row] of imageRows.entries()) {
+        const key = row?.key || comfyRowKey(row.nodeId, row.fieldName);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const upload = pendingUploads?.[key];
+        if (upload?.base64 || upload?.uploadSessionId) continue;
+        return `请先捕获图像：${imageRowLabel(row, index)}`;
+    }
+    return "";
 }
 
 export function workflowOptionLabel(item) {

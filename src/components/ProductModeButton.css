@@ -1,0 +1,74 @@
+.xlrh-product-mode-panel {
+    width: calc(100% - 16px);
+    margin: 6px 8px 0;
+    padding: clamp(3px, 1.2vw, 5px);
+    display: flex;
+    flex-direction: row;
+    gap: clamp(4px, 1.6vw, 7px);
+    box-sizing: border-box;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 10px;
+    background:
+        linear-gradient(90deg, rgba(var(--rh-theme-start-rgb, 77, 88, 255), 0.28), rgba(var(--rh-theme-end-rgb, 36, 255, 182), 0.22)),
+        rgba(255, 255, 255, 0.08);
+    box-shadow: none;
+}
+
+.xlrh-product-mode-item {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: clamp(24px, 6.8vw, 31px);
+    padding: 0 clamp(3px, 1.5vw, 7px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.78);
+    cursor: pointer;
+    font-size: clamp(9px, 3.1vw, 13px);
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.xlrh-product-mode-item:hover {
+    background: rgba(var(--rh-theme-start-rgb, 77, 88, 255), 0.18);
+    color: #fff;
+}
+
+.xlrh-product-mode-item.is-current {
+    background:
+        linear-gradient(90deg, rgba(var(--rh-theme-start-rgb, 77, 88, 255), 0.78), rgba(var(--rh-theme-end-rgb, 36, 255, 182), 0.78)),
+        rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.rh-shell-container.rh-theme-dark .xlrh-product-mode-panel {
+    border-color: rgba(210, 223, 235, 0.14);
+    background:
+        linear-gradient(90deg, rgba(var(--rh-theme-start-rgb, 120, 228, 211), 0.16), rgba(var(--rh-theme-end-rgb, 127, 169, 255), 0.14)),
+        rgba(17, 24, 33, 0.92);
+}
+
+.rh-shell-container.rh-theme-dark .xlrh-product-mode-item {
+    color: rgba(238, 245, 247, 0.78);
+}
+
+.rh-shell-container.rh-theme-dark .xlrh-product-mode-item:hover {
+    background: rgba(210, 223, 235, 0.1);
+    color: #eef5f7;
+}
+
+.rh-shell-container.rh-theme-dark .xlrh-product-mode-item.is-current {
+    background:
+        linear-gradient(90deg, rgba(var(--rh-theme-start-rgb, 120, 228, 211), 0.72), rgba(var(--rh-theme-end-rgb, 127, 169, 255), 0.62)),
+        rgba(255, 255, 255, 0.08);
+    color: #fff;
+}

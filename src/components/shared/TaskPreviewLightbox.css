@@ -1,0 +1,57 @@
+.xlrh-task-thumb-button {
+    display: block;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: zoom-in;
+}
+
+.xlrh-task-thumb-button:hover {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+.xlrh-task-preview-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 30000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: rgba(0, 0, 0, 0.78);
+}
+
+.xlrh-task-preview-dialog {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.xlrh-task-preview-image {
+    display: block;
+    max-width: calc(100vw - 36px);
+    max-height: calc(100vh - 36px);
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.45);
+}
+
+.xlrh-task-preview-close {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 50%;
+    background: rgba(20, 20, 20, 0.86);
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 20px;
+    line-height: 26px;
+    cursor: pointer;
+}
